@@ -1,38 +1,30 @@
 import os
 import requests
-from flask import Flask
-from threading import Thread
-import telebot
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-bot = telebot.TeleBot(BOT_TOKEN)
 
-app = Flask(__name__)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Patiala Crude Bot Ready! /price likho")
 
-@app.route('/')
-def home():
-    return "Patiala Crude Bot is Running!"
-
-@bot.message_handler(commands=['start'])
-def start(msg):
-    bot.reply_to(msg, "Patiala Crude Bot Ready! /price likho")
-
-@bot.message_handler(commands=['price'])
-def price(msg):
+async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        # Crude Oil Price (WTI)
-        r = requests.get("https://api.oilpriceapi.com/v1/prices/latest", timeout=10)
-        # Simple fallback
-        bot.reply_to(msg, "Current Crude: ~$80-82 (Live API connect karo)")
-    except:
-        bot.reply_to(msg, "Price fetch error, try again!")
+        # Live WTI Crude Price from Yahoo Finance (No API Key needed)
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/CL=F"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+        price_val = data['chart']['result'][0]['meta']['regularMarketPrice']
+        
+        msg = f"🛢️ **Live Crude Oil (WTI)**\n\nCurrent Price: **${price_val}**\n\nPatiala Rate = WTI + Local Charge (aap yahan apna formula laga sakte ho)"
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f"Live price lane me error: {e}\n\nBackup: ~$80-82")
 
-def run_bot():
-    bot.infinity_polling()
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("price", price))
 
-def run_web():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
-if __name__ == "__main__":
-    Thread(target=run_bot).start()
-    run_web()
+print("Bot Started...")
+app.run_polling()
