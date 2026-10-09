@@ -1,3 +1,12 @@
+import os, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+class H(BaseHTTPRequestHandler):
+ def do_GET(self):
+  self.send_response(200); self.end_headers(); self.wfile.write(b"Live")
+ def log_message(self, *a): pass
+def run():
+ HTTPServer(('0.0.0.0', int(os.environ.get("PORT",10000))), H).serve_forever()
+threading.Thread(target=run, daemon=True).start()
 import os, requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
