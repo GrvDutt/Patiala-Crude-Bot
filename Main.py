@@ -2,7 +2,7 @@ import os, threading, json, re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class H(BaseHTTPRequestHandler):
- def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v5.9 CLEAN")
+ def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v6.1 MERGED % CHANCE")
  def do_HEAD(self): self.send_response(200); self.end_headers()
  def log_message(self, *a): pass
 
@@ -55,6 +55,55 @@ def get_data(sym):
   return {"price":c,"change":ch}
  except: return None
 
+# --- NEW ADDITION: % CHANCE CALCULATION ---
+def get_technical_chance(sym="CL=F"):
+  try:
+    df = yf.Ticker(sym).history(period="3mo")
+    if len(df) < 50:
+        return 50, "STABLE 🔵 [Up 50% chance]", "Bias: SIDEWAYS"
+    close = df['Close']
+    ma20 = close.rolling(20).mean().iloc[-1]
+    ma50 = close.rolling(50).mean().iloc[-1]
+    ma200 = close.rolling(200).mean().iloc[-1] if len(df)>200 else ma50
+    price = close.iloc[-1]
+    delta = close.diff()
+    gain = (delta.where(delta>0,0)).rolling(14).mean()
+    loss = (-delta.where(delta<0,0)).rolling(14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi_now = float(rsi.iloc[-1])
+    ema12 = close.ewm(span=12).mean().iloc[-1]
+    ema26 = close.ewm(span=26).mean().iloc[-1]
+    macd_bull = ema12 > ema26
+
+    score = 0
+    if price > ma20: score+=20
+    if price > ma50: score+=20
+    if price > ma200: score+=10
+    if ma20 > ma50: score+=15
+    else: score-=10
+    if macd_bull: score+=15
+    if 55 < rsi_now < 70: score+=20
+    elif rsi_now > 70: score+=10
+    elif rsi_now > 45: score+=5
+    elif rsi_now < 35: score-=10
+
+    bullish_pct = max(15, min(85, 50 + score - 30))
+    bearish_pct = 100 - bullish_pct
+
+    if bullish_pct > 60:
+        trend = f"BULLISH 🟢 [Up {bullish_pct}% chance]"
+        scalp = f"Bias: BULLISH [{bullish_pct}% up]\nIdea: Dip pe CE Buy\nS1: {ma20:.2f} | SL: {ma50:.2f}"
+    elif bullish_pct < 40:
+        trend = f"BEARISH 🔴 [Down {bearish_pct}% chance]"
+        scalp = f"Bias: BEARISH [{bearish_pct}% down]\nIdea: Bounce pe PE Buy\nR1: {ma20:.2f} | SL: {ma50:.2f}"
+    else:
+        trend = f"STABLE 🔵 [Up {bullish_pct}% / Down {bearish_pct}%]"
+        scalp = f"Bias: SIDEWAYS\nIdea: Range scalp\nS1: {ma50:.2f} R1: {ma20:.2f}"
+    return bullish_pct, trend, scalp
+  except:
+    return 50, "STABLE 🔵 [Up 50% chance]", "Bias: NEUTRAL"
+
 def impact(head):
  hl = head.lower()
  if any(x in hl for x in ["fall","falls","down","drops","slump","plunge","decline","weak","surplus","build","oversupply","recession","slowdown","slash","cut outlook"]):
@@ -92,6 +141,8 @@ def make_hi_text():
  sp = get_data("^GSPC")
  nas = get_data("^IXIC")
  gold = get_data("GC=F")
+ # NEW LINES ADDED ONLY
+ _, trend_with_pct, scalp_text = get_technical_chance("CL=F")
  now = datetime.now(IST).strftime('%I:%M %p, %d %b')
  news = get_news()
  msg = f"📌 PATIALA CRUDE LIVE - {now}\n\n"
@@ -99,8 +150,10 @@ def make_hi_text():
   label = f"${crude['price']:.2f} (Rs {crude['price']*inr:,.0f})"
   msg += f"CRUDE OIL\n"
   msg += color_fmt(crude['change'], label) + "\n"
-  emo = "BULLISH 🟢" if crude['change']>0.5 else "BEARISH 🔴" if crude['change']<-0.5 else "STABLE 🔵"
-  msg += f"Trend: {emo}\n\n"
+  # OLD LINE REPLACED WITH % CHANCE
+  msg += f"Trend: {trend_with_pct}\n\n"
+  # NEW BLOCK ADDED
+  msg += f"📊 F&O SCALP:\n{scalp_text}\n\n"
  if nifty:
   msg += f"NIFTY: {color_fmt(nifty['change'], str(round(nifty['price'],2)))}\n"
  if sensex:
@@ -159,88 +212,3 @@ def direct_alert_handler(m):
         sym_key = "crude"
         for k in SYMBOLS:
             if k in low:
-                sym_key = k
-                break
-        match = re.search(r'([+-]?\d+(\.\d+)?)\s*%?', low)
-        if not match:
-            return
-        pct = float(match.group(1))
-        if abs(pct) < 0.1 or abs(pct) > 50:
-            return
-        sym = SYMBOLS.get(sym_key, "CL=F")
-        data = get_data(sym)
-        if not data:
-            return
-        base = data['price']
-        cid = str(m.chat.id)
-        if cid not in alerts:
-            alerts[cid] = []
-        alerts[cid].append([pct, base, sym_key, sym])
-        save_alerts()
-        bot.reply_to(m, f"✅ {sym_key.upper()} Alert: {pct}% \nBase: {base:.2f} -> Target: {base*(1+pct/100):.2f}")
-    except:
-        pass
-
-@bot.message_handler(commands=['myalerts','clearalerts'])
-def list_handler(m):
-    cid = str(m.chat.id)
-    if "clear" in m.text:
-        alerts[cid]=[]
-        save_alerts()
-        bot.reply_to(m,"Cleared")
-        return
-    if cid not in alerts or not alerts[cid]:
-        bot.reply_to(m,"Koi alert nahi")
-        return
-    txt="Alerts:\n"
-    for pct,base,sk,sym in alerts[cid]:
-        txt+=f"- {sk.upper()} {pct}% {base:.2f}->{base*(1+pct/100):.2f}\n"
-    bot.reply_to(m,txt)
-
-@bot.message_handler(commands=['liveon','pinon'])
-def liveon(m):
- global pinned_id
- msg = bot.send_message(GROUP_ID, make_hi_text())
- pinned_id = msg.message_id
- try: bot.pin_chat_message(GROUP_ID, pinned_id, disable_notification=True)
- except: pass
-
-def check_alerts():
-    try:
-        for cid in list(alerts.keys()):
-            for item in alerts[cid][:]:
-                pct,base,sk,sym = item
-                data = get_data(sym)
-                if not data: continue
-                curr = data['price']
-                target = base*(1+pct/100)
-                if pct>0 and curr>=target:
-                    bot.send_message(int(cid), f"🚨 {sk.upper()} {pct}% UP HIT! {base:.2f} -> {curr:.2f}")
-                    alerts[cid].remove(item)
-                elif pct<0 and curr<=target:
-                    bot.send_message(int(cid), f"🚨 {sk.upper()} {pct}% DOWN HIT! {base:.2f} -> {curr:.2f}")
-                    alerts[cid].remove(item)
-        save_alerts()
-    except: pass
-
-def updater():
- global pinned_id, last_crude_price
- while True:
-  try:
-   time.sleep(120)
-   crude = get_data("CL=F")
-   if not crude: continue
-   if pinned_id:
-    try: bot.edit_message_text(make_hi_text(), GROUP_ID, pinned_id)
-    except: pass
-   check_alerts()
-   if last_crude_price!=0:
-    diff = ((crude['price']-last_crude_price)/last_crude_price*100)
-    if abs(diff)>=0.70:
-     tag="HIGH" if diff>0 else "LOW"
-     bot.send_message(GROUP_ID, f"🚨 SUDDEN {tag} {diff:+.2f}% ${crude['price']:.2f}")
-   last_crude_price=crude['price']
-  except: time.sleep(60)
-
-threading.Thread(target=updater, daemon=True).start()
-bot.infinity_polling(none_stop=True, timeout=90)
