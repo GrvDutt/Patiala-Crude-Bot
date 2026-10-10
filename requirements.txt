@@ -2,4 +2,3 @@ pyTelegramBotAPI
 yfinance
 requests
 pytz
-lxml
