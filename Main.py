@@ -38,9 +38,9 @@ def get_data(sym):
 
 def impact(head):
  hl = head.lower()
- if any(x in hl for x in ["cut","war","tension","attack","low","falls","decline","strike","disrupt","blast","reserve"]):
+ if any(x in hl for x in ["cut","war","tension","attack","low","falls","decline","strike","disrupt","blast","reserve","slash","fall"]):
   return "🟢 BULLISH"
- if any(x in hl for x in ["rise","high","surplus","gain","recession","demand down","strong dollar","hike","build"]):
+ if any(x in hl for x in ["rise","high","surplus","gain","recession","demand down","weak demand","strong dollar","hike","build","slash outlook"]):
   return "🔴 BEARISH"
  return "🔵 NEUTRAL"
 
