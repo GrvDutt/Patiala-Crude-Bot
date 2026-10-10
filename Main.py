@@ -2,7 +2,7 @@ import os, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class H(BaseHTTPRequestHandler):
- def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v5.3")
+ def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v5.4 FAST NEWS")
  def do_HEAD(self): self.send_response(200); self.end_headers()
  def log_message(self, *a): pass
 
@@ -11,7 +11,7 @@ def run_health():
  HTTPServer(('0.0.0.0', port), H).serve_forever()
 threading.Thread(target=run_health, daemon=True).start()
 
-import time, pytz, requests, yfinance as yf, telebot
+import time, pytz, requests, yfinance as yf, telebot, feedparser
 from datetime import datetime
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -38,20 +38,35 @@ def get_data(sym):
 
 def impact(head):
  hl = head.lower()
- if "cut" in hl or "war" in hl or "tension" in hl: return "🟢 BULLISH"
- if "high" in hl or "surplus" in hl or "recession" in hl: return "🔴 BEARISH"
+ if any(x in hl for x in ["cut","war","tension","attack","low","falls","decline","strike","disrupt","blast","reserve"]):
+  return "🟢 BULLISH"
+ if any(x in hl for x in ["rise","high","surplus","gain","recession","demand down","strong dollar","hike","build"]):
+  return "🔴 BEARISH"
  return "🔵 NEUTRAL"
 
 def get_news():
- try:
-  if not FINNHUB_KEY: return "1. Market stable - NEUTRAL"
-  r = requests.get(f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}", timeout=8).json()
-  txt = ""
-  for i in range(min(3,len(r))):
-   h = r[i]['headline'][:65]
-   txt += f"{i+1}. {h} {impact(h)}\n"
-  return txt
- except: return "1. OPEC awaited - NEUTRAL"
+  # 1st Fast Google
+  try:
+    feed = feedparser.parse("https://news.google.com/rss/search?q=crude+oil+OPEC+US+inventory&hl=en-IN&gl=IN&ceid=IN:en")
+    if feed.entries and len(feed.entries)>=3:
+      txt = ""
+      for i in range(3):
+        h = feed.entries[i].title[:65].replace("<","").replace(">","")
+        txt += f"{i+1}. {h} {impact(h)}\n"
+      return txt
+  except: pass
+  # 2nd Finnhub Backup
+  try:
+    if FINNHUB_KEY and len(FINNHUB_KEY)>10:
+      r = requests.get(f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}",timeout=5).json()
+      if r and len(r)>=3:
+        txt = ""
+        for i in range(min(3,len(r))):
+          h = r[i]['headline'][:65].replace("<","").replace(">","")
+          txt += f"{i+1}. {h} {impact(h)}\n"
+        return txt
+  except: pass
+  return "1. OPEC supply in focus - 🔵 NEUTRAL\n2. US inventory awaited - 🔵 NEUTRAL\n3. Crude demand outlook stable - 🔵 NEUTRAL"
 
 def color_fmt(ch, label):
  if ch > 0.10: return f"🟢 {label} (+{ch:.2f}%)"
