@@ -1,17 +1,15 @@
-import os, threading, json, re, time, logging
+import os, threading, json, re, time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- HEALTH FIX: Render ko lagta hai bot LIVE hai ---
 class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b"OK v7.1 FORMATTED PLAN - LIVE")
+  self.wfile.write(b"OK v7.1 FIXED - 15 MIN MODE")
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
- def log_message(self, *a):
-  pass
+ def log_message(self, *a): pass
 
 def run_health():
  port = int(os.environ.get("PORT", 10000))
@@ -20,12 +18,9 @@ threading.Thread(target=run_health, daemon=True).start()
 
 import pytz, requests, yfinance as yf, telebot, feedparser
 from datetime import datetime
-import pandas as pd
-import numpy as np
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_ID = int(os.getenv("GROUP_ID", "-1004448478970"))
-FINNHUB_KEY = os.getenv("FINNHUB_KEY", "")
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False)
 IST = pytz.timezone('Asia/Kolkata')
 pinned_id = None
@@ -36,19 +31,12 @@ alerts = {}
 if os.path.exists(ALERTS_FILE):
     try: alerts = json.loads(open(ALERTS_FILE).read())
     except: alerts = {}
+
 def save_alerts():
     try: open(ALERTS_FILE,"w").write(json.dumps(alerts))
     except: pass
 
-SYMBOLS = {
- "crude": "CL=F",
- "oil": "CL=F",
- "nifty": "^NSEI",
- "sensex": "^BSESN",
- "sp": "^GSPC",
- "nasdaq": "^IXIC",
- "gold": "GC=F"
-}
+SYMBOLS = {"crude":"CL=F","oil":"CL=F","nifty":"^NSEI","sensex":"^BSESN","sp":"^GSPC","nasdaq":"^IXIC","gold":"GC=F"}
 
 def get_inr():
  try: return requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()['rates']['INR']
@@ -64,12 +52,12 @@ def get_data(sym):
   return {"price":c,"change":ch}
  except: return None
 
+# --- SYNTAX FIX YAHAN KIYA HAI ---
 def get_technical_chance(sym="CL=F"):
   try:
     df = yf.Ticker(sym).history(period="6mo")
-    if len(df) < 60:
-        return 50, "STABLE", "SIDEWAYS"
-    close = df['Close']
+    if len(df) < 60: return 50, "STABLE", "SIDEWAYS"
+    close = df["Close"]
     ma20 = close.rolling(20).mean().iloc[-1]
     ma50 = close.rolling(50).mean().iloc[-1]
     ma200 = close.rolling(200).mean().iloc[-1] if len(df)>200 else ma50
@@ -85,4 +73,53 @@ def get_technical_chance(sym="CL=F"):
     macd_line = ema12_series - ema26_series
     signal_line = macd_line.ewm(span=9, adjust=False).mean()
     macd_hist_bull = float(macd_line.iloc[-1] - signal_line.iloc[-1]) > 0
-    atr = (df['High'] - df['Low
+    # FIXED LINE - ab double quotes use kiye
+    atr = (df["High"] - df["Low"]).rolling(14).mean().iloc[-1]
+    score = 0
+    if price > ma20: score+=18
+    if price > ma50: score+=18
+    if price > ma200: score+=10
+    if ma20 > ma50: score+=12
+    else: score-=12
+    if macd_hist_bull: score+=18
+    if 50 < rsi_now < 68: score+=20
+    elif rsi_now >= 68 and rsi_now < 78: score+=8
+    elif rsi_now > 78: score-=5
+    elif rsi_now > 42: score+=3
+    elif rsi_now < 32: score-=12
+    bullish_pct = max(15, min(85, int(50 + score - 28)))
+    bearish_pct = 100 - bullish_pct
+    if bullish_pct >= 62:
+        trend = f"BULL_{bullish_pct}"
+        scalp = f"BULL_{bullish_pct}_{ma20:.2f}_{ma50:.2f}_{atr:.2f}_{rsi_now:.1f}"
+    elif bullish_pct <= 38:
+        trend = f"BEAR_{bearish_pct}"
+        scalp = f"BEAR_{bearish_pct}_{ma20:.2f}_{ma50:.2f}_{atr:.2f}_{rsi_now:.1f}"
+    else:
+        trend = f"STABLE_{bullish_pct}_{bearish_pct}"
+        scalp = f"STABLE_{bullish_pct}_{ma50:.2f}_{ma20:.2f}_{rsi_now:.1f}"
+    return bullish_pct, trend, scalp
+  except Exception as e:
+    print(f"Technical error: {e}")
+    return 50, "STABLE_50", "STABLE_50"
+
+def impact(head):
+ hl = head.lower()
+ if any(x in hl for x in ["fall","falls","down","drops","slump","plunge","decline","weak","surplus","build","oversupply","recession","slowdown","slash","cut outlook"]): return "RED BEARISH"
+ if any(x in hl for x in ["cut","war","tension","attack","strike","disrupt","blast","embargo","sanction","draw"]): return "GREEN BULLISH"
+ return "BLUE NEUTRAL"
+
+def get_news():
+  try:
+    feed = feedparser.parse("https://news.google.com/rss/search?q=crude+oil+OPEC&hl=en-IN&gl=IN&ceid=IN:en")
+    if feed.entries:
+      txt = ""
+      for i in range(3):
+        h = feed.entries[i].title[:65].replace("<","").replace(">","")
+        imp = impact(h)
+        if "RED" in imp: icon = "🔴 🐻 BEARISH"
+        elif "GREEN" in imp: icon = "🟢 🐂 BULLISH"
+        else: icon = "🔵 NEUTRAL"
+        txt += f"{i+1}. {h} - {icon}\n"
+      return txt
+  except:
