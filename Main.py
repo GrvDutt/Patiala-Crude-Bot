@@ -2,7 +2,7 @@ import os, threading, json, re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class H(BaseHTTPRequestHandler):
- def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v5.7 FINAL")
+ def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"OK v5.8 FINAL")
  def do_HEAD(self): self.send_response(200); self.end_headers()
  def log_message(self, *a): pass
 
@@ -33,11 +33,8 @@ def save_alerts():
 
 SYMBOLS = {
  "crude": "CL=F", "oil": "CL=F",
- "nifty": "^NSEI",
- "sensex": "^BSESN",
- "sp": "^GSPC", "s&p": "^GSPC", "snp": "^GSPC",
- "nasdaq": "^IXIC",
- "gold": "GC=F"
+ "nifty": "^NSEI", "sensex": "^BSESN",
+ "sp": "^GSPC", "s&p": "^GSPC", "nasdaq": "^IXIC", "gold": "GC=F"
 }
 
 def get_inr():
@@ -51,38 +48,28 @@ def get_data(sym):
   c = float(h['Close'].iloc[-1])
   p = float(h['Close'].iloc[-2]) if len(h)>1 else c
   ch = ((c-p)/p*100) if p else 0
-  return {"price":c,"high":float(h['High'].iloc[-1]),"low":float(h['Low'].iloc[-1]),"change":ch}
+  return {"price":c,"change":ch}
  except: return None
 
 def impact(head):
  hl = head.lower()
- if any(x in hl for x in ["fall","falls","down","drops","slump","plunge","slash outlook","weak demand","surplus","build","rise in inventory","high","recession","demand down","strong dollar"]):
+ if any(x in hl for x in ["fall","falls","down","drops","slump","plunge","decline","weak","surplus","build","oversupply","recession","slowdown","slash","cut outlook"]):
   return "🔴 BEARISH"
- if any(x in hl for x in ["cut","war","tension","attack","strike","disrupt","blast","embargo","sanction","draw","low inventory","reserve low"]):
+ if any(x in hl for x in ["cut","war","tension","attack","strike","disrupt","blast","embargo","sanction","draw"]):
   return "🟢 BULLISH"
  return "🔵 NEUTRAL"
 
 def get_news():
   try:
-    feed = feedparser.parse("https://news.google.com/rss/search?q=crude+oil+OPEC+US+inventory&hl=en-IN&gl=IN&ceid=IN:en")
-    if feed.entries and len(feed.entries)>=3:
+    feed = feedparser.parse("https://news.google.com/rss/search?q=crude+oil+OPEC&hl=en-IN&gl=IN&ceid=IN:en")
+    if feed.entries:
       txt = ""
       for i in range(3):
         h = feed.entries[i].title[:65].replace("<","").replace(">","")
-        txt += f"{i+1}. {h} {impact(h)}\n"
+        txt += f"{i+1}. {h} - {impact(h)}\n"
       return txt
   except: pass
-  try:
-    if FINNHUB_KEY and len(FINNHUB_KEY)>10:
-      r = requests.get(f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_KEY}",timeout=5).json()
-      if r and len(r)>=3:
-        txt = ""
-        for i in range(min(3,len(r))):
-          h = r[i]['headline'][:65].replace("<","").replace(">","")
-          txt += f"{i+1}. {h} {impact(h)}\n"
-        return txt
-  except: pass
-  return "1. OPEC supply in focus - 🔵 NEUTRAL\n2. US inventory awaited - 🔵 NEUTRAL\n3. Crude demand outlook stable - 🔵 NEUTRAL"
+  return "1. OPEC supply in focus - 🔵 NEUTRAL\n2. US inventory awaited - 🔵 NEUTRAL\n3. Crude outlook stable - 🔵 NEUTRAL"
 
 def color_fmt(ch, label):
  if ch > 0.10: return f"🟢 {label} (+{ch:.2f}%)"
@@ -101,29 +88,21 @@ def make_hi_text():
  news = get_news()
  msg = f"📌 <b>PATIALA CRUDE LIVE - {now}</b>\n\n"
  if crude:
-  crude_label = f"${crude['price']:.2f} (Rs {crude['price']*inr:,.0f})"
   msg += f"🛢️ <b>CRUDE OIL</b>\n"
-  msg += color_fmt(crude['change'], crude_label) + "\n"
+  msg += color_fmt(crude['change'], f"${crude['price']:.2f} (Rs {crude['price']*inr:,.0f})") + "\n"
   emo = "BULLISH 🟢" if crude['change']>0.5 else "BEARISH 🔴" if crude['change']<-0.5 else "STABLE 🔵"
   msg += f"Trend: {emo}\n\n"
- if nifty:
-  msg += f"🇮🇳 NIFTY: {color_fmt(nifty['change'], str(round(nifty['price'],2)))}\n"
- if sensex:
-  msg += f"SENSEX: {color_fmt(sensex['change'], str(round(sensex['price'],2)))}\n"
- if sp:
-  msg += f"🇺🇸 S&P: {color_fmt(sp['change'], str(round(sp['price'],2)))}\n"
- if nas:
-  msg += f"NASDAQ: {color_fmt(nas['change'], str(round(nas['price'],2)))}\n"
- if gold:
-  gold_label = f"${gold['price']:.2f}"
-  msg += f"💰 GOLD: {color_fmt(gold['change'], gold_label)}\n"
+ if nifty: msg += f"🇮🇳 NIFTY: {color_fmt(nifty['change'], str(round(nifty['price'],2)))}\n"
+ if sensex: msg += f"SENSEX: {color_fmt(sensex['change'], str(round(sensex['price'],2)))}\n"
+ if sp: msg += f"🇺🇸 S&P: {color_fmt(sp['change'], str(round(sp['price'],2)))}\n"
+ if nas: msg += f"NASDAQ: {color_fmt(nas['change'], str(round(nas['price'],2)))}\n"
+ if gold: msg += f"💰 GOLD: {color_fmt(gold['change'], f\"${gold['price']:.2f}\")}\n"
  msg += f"\n🗞️ <b>NEWS</b>\n{news}\n"
  return msg
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hii','hello','status'])
 def hi_handler(m): bot.send_message(m.chat.id, make_hi_text())
 
-# SLASH COMMAND
 @bot.message_handler(commands=['alertwhen'])
 def alertwhen_handler(m):
     try:
@@ -131,27 +110,22 @@ def alertwhen_handler(m):
         sym_key = "crude"
         for k in SYMBOLS:
             if k in txt:
-                sym_key = k
-                break
+                sym_key = k; break
         match = re.search(r'([+-]?\d+(\.\d+)?)\s*%?', txt)
-        if not match:
-            bot.reply_to(m, "Use: /alertwhen crude +10\n/alertwhen nifty -5\n/alertwhen +10")
-            return
+        if not match: bot.reply_to(m, "Use: /alertwhen crude +0.41\n/alertwhen +1"); return
         pct = float(match.group(1))
-        if abs(pct) < 1 or abs(pct) > 50: bot.reply_to(m, "1% to 50% allowed"); return
+        if abs(pct) < 0.1 or abs(pct) > 50: bot.reply_to(m, "0.1% to 50% allowed"); return
         sym = SYMBOLS.get(sym_key, "CL=F")
         data = get_data(sym)
-        if not data: bot.reply_to(m, "Price nahi mila, try later"); return
+        if not data: bot.reply_to(m, "Price nahi mila"); return
         base = data['price']
         cid = str(m.chat.id)
         if cid not in alerts: alerts[cid] = []
         alerts[cid].append([pct, base, sym_key, sym])
         save_alerts()
         bot.reply_to(m, f"✅ {sym_key.upper()} Alert: {pct}% {'UP' if pct>0 else 'DOWN'}\nBase: {base:.2f} -> Target: {base*(1+pct/100):.2f}")
-    except:
-        bot.reply_to(m, "Format: /alertwhen crude +10")
+    except: bot.reply_to(m, "Format: /alertwhen +0.41")
 
-# DIRECT WITHOUT SLASH
 @bot.message_handler(func=lambda m: m.text and ("alert when" in m.text.lower() or m.text.lower().strip().startswith("alertwhen")))
 def direct_alert_handler(m):
     try:
@@ -159,13 +133,11 @@ def direct_alert_handler(m):
         low = m.text.lower()
         sym_key = "crude"
         for k in SYMBOLS:
-            if k in low:
-                sym_key = k
-                break
+            if k in low: sym_key = k; break
         match = re.search(r'([+-]?\d+(\.\d+)?)\s*%?', low)
         if not match: return
         pct = float(match.group(1))
-        if abs(pct) < 1 or abs(pct) > 50: return
+        if abs(pct) < 0.1 or abs(pct) > 50: return
         sym = SYMBOLS.get(sym_key, "CL=F")
         data = get_data(sym)
         if not data: return
@@ -177,23 +149,16 @@ def direct_alert_handler(m):
         bot.reply_to(m, f"✅ {sym_key.upper()} Alert: {pct}% {'UP' if pct>0 else 'DOWN'}\nBase: {base:.2f} -> Target: {base*(1+pct/100):.2f}")
     except: pass
 
-@bot.message_handler(commands=['myalerts'])
-def myalerts_handler(m):
+@bot.message_handler(commands=['myalerts','clearalerts'])
+def list_handler(m):
     cid = str(m.chat.id)
-    if cid not in alerts or not alerts[cid]:
-        bot.reply_to(m, "Koi alert nahi hai."); return
-    txt = "🔔 Your Alerts:\n"
-    for item in alerts[cid]:
-        if len(item)==2: pct, base = item; sym_key="crude"
-        else: pct, base, sym_key, sym = item
-        txt += f"- {sym_key.upper()} {pct}% from {base:.2f} -> {base*(1+pct/100):.2f}\n"
-    bot.reply_to(m, txt)
-
-@bot.message_handler(commands=['clearalerts'])
-def clearalerts_handler(m):
-    alerts[str(m.chat.id)] = []
-    save_alerts()
-    bot.reply_to(m, "🗑️ All alerts cleared.")
+    if "clear" in m.text:
+        alerts[cid]=[]; save_alerts(); bot.reply_to(m,"🗑️ Cleared"); return
+    if cid not in alerts or not alerts[cid]: bot.reply_to(m,"Koi alert nahi"); return
+    txt="🔔 Alerts:\n"
+    for pct,base,sk,sym in alerts[cid]:
+        txt+=f"- {sk.upper()} {pct}% {base:.2f}->{base*(1+pct/100):.2f}\n"
+    bot.reply_to(m,txt)
 
 @bot.message_handler(commands=['liveon','pinon'])
 def liveon(m):
@@ -207,23 +172,19 @@ def check_alerts():
     try:
         for cid in list(alerts.keys()):
             for item in alerts[cid][:]:
-                if len(item)==2:
-                    pct, base = item; sym_key="crude"; sym="CL=F"
-                else:
-                    pct, base, sym_key, sym = item
+                pct,base,sk,sym = item
                 data = get_data(sym)
                 if not data: continue
                 curr = data['price']
-                target = base * (1 + pct/100)
-                if pct > 0 and curr >= target:
-                    bot.send_message(int(cid), f"🚨 {sym_key.upper()} {pct}% UP HIT!\nBase {base:.2f} -> Now {curr:.2f}\nTarget was {target:.2f}")
+                target = base*(1+pct/100)
+                if pct>0 and curr>=target:
+                    bot.send_message(int(cid), f"🚨 {sk.upper()} {pct}% UP HIT! {base:.2f} -> {curr:.2f}")
                     alerts[cid].remove(item)
-                elif pct < 0 and curr <= target:
-                    bot.send_message(int(cid), f"🚨 {sym_key.upper()} {pct}% DOWN HIT!\nBase {base:.2f} -> Now {curr:.2f}\nTarget was {target:.2f}")
+                elif pct<0 and curr<=target:
+                    bot.send_message(int(cid), f"🚨 {sk.upper()} {pct}% DOWN HIT! {base:.2f} -> {curr:.2f}")
                     alerts[cid].remove(item)
         save_alerts()
-    except Exception as e:
-        print("alert err", e)
+    except: pass
 
 def updater():
  global pinned_id, last_crude_price
@@ -236,15 +197,13 @@ def updater():
     try: bot.edit_message_text(make_hi_text(), GROUP_ID, pinned_id)
     except: pass
    check_alerts()
-   if last_crude_price!= 0:
+   if last_crude_price!=0:
     diff = ((crude['price']-last_crude_price)/last_crude_price*100)
-    if abs(diff) >= 0.70:
-     tag = "HIGH" if diff>0 else "LOW"
-     bot.send_message(GROUP_ID, f"🚨 SUDDEN {tag} {diff:+.2f}% 🛢️ ${crude['price']:.2f}", disable_notification=False)
-   last_crude_price = crude['price']
-  except Exception as e:
-   print(e)
-   time.sleep(60)
+    if abs(diff)>=0.70:
+     tag="HIGH" if diff>0 else "LOW"
+     bot.send_message(GROUP_ID, f"🚨 SUDDEN {tag} {diff:+.2f}% 🛢️ ${crude['price']:.2f}")
+   last_crude_price=crude['price']
+  except: time.sleep(60)
 
 threading.Thread(target=updater, daemon=True).start()
 bot.infinity_polling(none_stop=True, timeout=90)
