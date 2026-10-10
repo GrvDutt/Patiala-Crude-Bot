@@ -5,7 +5,7 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b"OK v7.0 STAT ACCURATE + EMOJI + PLAN")
+  self.wfile.write(b"OK v7.1 FORMATTED PLAN")
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
@@ -63,38 +63,28 @@ def get_data(sym):
   return {"price":c,"change":ch}
  except: return None
 
-# --- UPDATED: More Statistically Accurate % Chance (Wilder RSI + EMA) ---
 def get_technical_chance(sym="CL=F"):
   try:
     df = yf.Ticker(sym).history(period="6mo")
     if len(df) < 60:
-        return 50, "🔵 STABLE [Up 50% chance]", "Bias: SIDEWAYS | Wait for confirmation"
+        return 50, "STABLE", "SIDEWAYS"
     close = df['Close']
     ma20 = close.rolling(20).mean().iloc[-1]
     ma50 = close.rolling(50).mean().iloc[-1]
     ma200 = close.rolling(200).mean().iloc[-1] if len(df)>200 else ma50
     price = close.iloc[-1]
-
-    # Wilder RSI 14 (more accurate)
     delta = close.diff()
     gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     rsi_now = float(rsi.iloc[-1])
-
-    # MACD accurate
-    ema12 = close.ewm(span=12, adjust=False).mean().iloc[-1]
-    ema26 = close.ewm(span=26, adjust=False).mean().iloc[-1]
     ema12_series = close.ewm(span=12, adjust=False).mean()
     ema26_series = close.ewm(span=26, adjust=False).mean()
     macd_line = ema12_series - ema26_series
     signal_line = macd_line.ewm(span=9, adjust=False).mean()
     macd_hist_bull = float(macd_line.iloc[-1] - signal_line.iloc[-1]) > 0
-
-    # Volume / Volatility filter
     atr = (df['High'] - df['Low']).rolling(14).mean().iloc[-1]
-
     score = 0
     if price > ma20: score+=18
     if price > ma50: score+=18
@@ -102,28 +92,25 @@ def get_technical_chance(sym="CL=F"):
     if ma20 > ma50: score+=12
     else: score-=12
     if macd_hist_bull: score+=18
-    if 50 < rsi_now < 68: score+=20 # ideal bullish momentum
-    elif rsi_now >= 68 and rsi_now < 78: score+=8 # overbought but strong
+    if 50 < rsi_now < 68: score+=20
+    elif rsi_now >= 68 and rsi_now < 78: score+=8
     elif rsi_now > 78: score-=5
     elif rsi_now > 42: score+=3
-    elif rsi_now < 32: score-=12 # oversold
-
+    elif rsi_now < 32: score-=12
     bullish_pct = max(15, min(85, int(50 + score - 28)))
     bearish_pct = 100 - bullish_pct
-
     if bullish_pct >= 62:
-        trend = f"🐂 BULLISH [Up {bullish_pct}% chance]"
-        scalp = f"Bias: 🐂 BULLISH [{bullish_pct}% up]\nIdea: Dip pe CE Buy\nS1: {ma20:.2f} | SL: {ma50:.2f} | ATR: {atr:.2f}"
+        trend = f"BULL_{bullish_pct}"
+        scalp = f"BULL_{bullish_pct}_{ma20:.2f}_{ma50:.2f}_{atr:.2f}_{rsi_now:.1f}"
     elif bullish_pct <= 38:
-        trend = f"🐻 BEARISH [Down {bearish_pct}% chance]"
-        scalp = f"Bias: 🐻 BEARISH [{bearish_pct}% down]\nIdea: Bounce pe PE Buy\nR1: {ma20:.2f} | SL: {ma50:.2f} | ATR: {atr:.2f}"
+        trend = f"BEAR_{bearish_pct}"
+        scalp = f"BEAR_{bearish_pct}_{ma20:.2f}_{ma50:.2f}_{atr:.2f}_{rsi_now:.1f}"
     else:
-        trend = f"🔵 STABLE [Up {bullish_pct}% / Down {bearish_pct}%]"
-        scalp = f"Bias: 🔵 SIDEWAYS\nIdea: Range scalp\nS1: {ma50:.2f} R1: {ma20:.2f} | RSI: {rsi_now:.1f}"
-
+        trend = f"STABLE_{bullish_pct}_{bearish_pct}"
+        scalp = f"STABLE_{bullish_pct}_{ma50:.2f}_{ma20:.2f}_{rsi_now:.1f}"
     return bullish_pct, trend, scalp
   except:
-    return 50, "🔵 STABLE [Up 50% chance]", "Bias: NEUTRAL"
+    return 50, "STABLE_50", "STABLE_50"
 
 def impact(head):
  hl = head.lower()
@@ -154,37 +141,94 @@ def color_fmt(ch, label):
  if ch < -0.10: return f"🔴 {label} ({ch:.2f}%)"
  return f"🔵 {label} ({ch:.2f}% Stable)"
 
-# --- NEW: NIFTY PLAN ---
+# --- UPDATED FORMATTED PLAN WITH BOLD + SPACE + FAST READ ---
 def get_nifty_plan_text():
-  return """📌 NIFTY 50 — FULL CONFLUENCE & TRADE PLAN
-MONDAY • 12 OCT 2026 | Educational
+  return """<b>📌 NIFTY 50 - TRADE PLAN</b>
+<b>MONDAY • 12 OCT 2026</b> | Educational
+━━━━━━━━━━━━━━━━━━━━
 
-CONFLUENCE SNAPSHOT
-• Structure: 22,180 (Oct 8 low) ≈ April low - 3-month low retest
-• Friday close: 22,520 - Low 22,180 se +340 pts - buyers ne defend kiya
-• PCR/OI: PCR 1.15 - Put OI 240M vs Call OI 207M - Put writers active
-• ATM Straddle (Oct 13): 205 - PE 152.7 vs CE 134.85 - Put premium richer
-• Flows: FII -12,944 → -3,569 Cr; DII +10,703 / +4,743 Cr - selling slow, DII absorb
-• Global: Nasdaq fut +0.85% • Brent -1.2% - Opening positive, crude cool
-• Trend: 1Y -10.9% • Below 200-EMA - Bada trend bearish, bounce ko reversal mat samjho
+<b>⚡ FAST READ (10 Sec)</b>
+🐂 <b>LONG tabhi jab:</b>
+  → <code>22,580</code> ke upar tikke = LONG <code>22,600</code>
+  → <code>22,350-22,400</code> hold kare = Dip Buy
 
-KEY LEVELS
-Resistance: 22,950 (T2) - 22,775 (T1) - 22,600 (long trigger) - 22,580 (OR breakout) - 22,520 (Fri close)
-Support: 22,400 (dip-buy) - 22,350 (lower edge) - 22,220 (failed bounce) - 22,180 (key low / breakdown) - 22,000 (down target)
+🐻 <b>SHORT tabhi jab:</b>
+  → <code>22,180</code> tode + <code>22,220</code> pe fail = SHORT
 
-MONDAY ENTRY PLAN
-9:15-9:30 Any opening → NO TRADE - mark OR high/low
-A 9:30-11:00 Gap-up / OR breakout above 22,580 → LONG 22,600 | SL 22,480 | Targets 22,775 → 22,950
-B 9:30-12:30 Dip 22,350-22,400 holds, no close below → LONG 22,400 | SL 22,140 | Targets 22,580 → 22,775
-C Anytime Break below 22,180 then bounce fails at 22,220 → SHORT 22,180 | SL 22,340 | Target 22,000
-After 2:45 PM Any condition → No new trades, square off by 3:05 PM
+<b>Make-or-Break = 22,180</b>
+Bada Trend = <b>BEARISH (200-EMA ke neeche)</b>
 
-QUICK GAME PLAN
-• 22,180 = major make-or-break support
-• 22,580 ke upar sustained breakout = long setup, confirmation zaroori
-• 22,350-22,400 hold kare tabhi dip-buy
-• 22,180 neeche + 22,220 rejection = short setup
-• Trend below 200-EMA: risk tight rakho, SL mandatory
+━━━━━━━━━━━━━━━━━━━━
+<b>🔍 CONFLUENCE SNAPSHOT</b>
+
+- <b>Structure:</b> 22,180 = Oct 8 low ≈ April low
+  3-month low retest ho raha hai
+
+- <b>Friday Close:</b> 22,520 (+340 pts)
+  Buyers ne defend kiya 🟢
+
+- <b>PCR/OI:</b> PCR 1.15
+  Put OI 240M vs Call 207M = Defensive
+
+- <b>ATM Straddle:</b> 205 (13 Oct)
+  PE 152.7 > CE 134.8 = Put mehenga
+
+- <b>Flows:</b>
+  FII: -12,944 → -3,569 Cr = Selling slow 🟢
+  DII: +10,703 / +4,743 Cr = Absorb
+
+- <b>Global:</b>
+  Nasdaq Fut +0.85% 🟢 | Brent -1.2% 🔴
+  Opening Positive
+
+━━━━━━━━━━━━━━━━━━━━
+<b>🎯 KEY LEVELS</b>
+
+<b>Resistance (Upar):</b>
+  <code>22,580</code> → OR Breakout Trigger
+  <code>22,600</code> → 🚀 LONG Entry
+  <code>22,775</code> → Target 1
+  <code>22,950</code> → Target 2
+
+<b>Support (Neeche):</b>
+  <code>22,400</code> → Dip-Buy Zone
+  <code>22,350</code> → Lower Edge
+  <code>22,220</code> → Failed Bounce
+  <code>22,180</code> → 💥 Breakdown / SHORT Trigger
+  <code>22,000</code> → Down Target
+
+━━━━━━━━━━━━━━━━━━━━
+<b>📋 ENTRY PLAN</b>
+
+<b>9:15 - 9:30</b>
+→ <b>NO TRADE</b> - Sirf OR High/Low mark karo
+
+<b>PLAN A [9:30-11:00] - OR Breakout</b>
+Gap-up + Above <code>22,580</code> sustain
+→ <b>LONG 22,600</b>
+  SL: <code>22,480</code>
+  Target: <code>22,775 → 22,950</code>
+
+<b>PLAN B [9:30-12:30] - Dip Buy</b>
+<code>22,350-22,400</code> hold, neeche close nahi
+→ <b>LONG 22,400</b>
+  SL: <code>22,140</code>
+  Target: <code>22,580 → 22,775</code>
+
+<b>PLAN C [Anytime] - Breakdown</b>
+Below <code>22,180</code> + bounce fail at <code>22,220</code>
+→ <b>SHORT 22,180</b>
+  SL: <code>22,340</code>
+  Target: <code>22,000</code>
+
+<b>After 2:45 PM → No New Trades (3:05 Square-off)</b>
+
+━━━━━━━━━━━━━━━━━━━━
+<b>⚡ GAME PLAN</b>
+→ 22,180 major support
+→ 22,580 ke upar hi long confirm
+→ 22,350 hold tabhi dip-buy
+→ Risk tight, SL mandatory
 """
 
 def make_hi_text():
@@ -198,13 +242,27 @@ def make_hi_text():
  bull_pct, trend_line, scalp_line = get_technical_chance("CL=F")
  now = datetime.now(IST).strftime('%I:%M %p, %d %b')
  news = get_news()
- msg = f"📌 PATIALA CRUDE LIVE - {now}\n\n"
+ msg = f"<b>📌 PATIALA CRUDE LIVE - {now}</b>\n\n"
  if crude:
   label = f"${crude['price']:.2f} (Rs {crude['price']*inr:,.0f})"
-  msg += f"🛢️ CRUDE OIL\n"
+  msg += f"🛢️ <b>CRUDE OIL</b>\n"
   msg += color_fmt(crude['change'], label) + "\n"
-  msg += f"Trend: {trend_line}\n\n"
-  msg += f"📊 F&O SCALP:\n{scalp_line}\n\n"
+  if "BULL_" in trend_line:
+    bp = trend_line.split("_")[1]
+    msg += f"Trend: 🐂 <b>BULLISH [Up {bp}% chance]</b>\n\n"
+    sparts = scalp_line.split("_")
+    msg += f"📊 <b>F&O SCALP:</b>\nBias: 🐂 BULLISH [{bp}% up]\nIdea: Dip pe CE Buy\nS1: <code>{sparts[2]}</code> | SL: <code>{sparts[3]}</code>\n\n"
+  elif "BEAR_" in trend_line:
+    bp = trend_line.split("_")[1]
+    msg += f"Trend: 🐻 <b>BEARISH [Down {bp}% chance]</b>\n\n"
+    sparts = scalp_line.split("_")
+    msg += f"📊 <b>F&O SCALP:</b>\nBias: 🐻 BEARISH [{bp}% down]\nIdea: Bounce pe PE Buy\nR1: <code>{sparts[2]}</code> | SL: <code>{sparts[3]}</code>\n\n"
+  else:
+    parts = trend_line.split("_")
+    b = parts[1] if len(parts)>1 else "50"
+    br = parts[2] if len(parts)>2 else "50"
+    msg += f"Trend: 🔵 <b>STABLE [Up {b}% / Down {br}%]</b>\n\n"
+    msg += f"📊 <b>F&O SCALP:</b>\nBias: 🔵 SIDEWAYS\nIdea: Range scalp\n\n"
  if nifty:
   msg += f"NIFTY: {color_fmt(nifty['change'], str(round(nifty['price'],2)))}\n"
  if sensex:
@@ -216,8 +274,8 @@ def make_hi_text():
  if gold:
   g_label = f"${gold['price']:.2f}"
   msg += f"GOLD: {color_fmt(gold['change'], g_label)}\n"
- msg += f"\n📰 NEWS\n{news}\n"
- msg += "\n💡 Type 'plan' for NIFTY 50 Trade Plan"
+ msg += f"\n📰 <b>NEWS</b>\n{news}\n"
+ msg += "\n💡 Type <b>'plan'</b> for NIFTY 50 Trade Plan"
  return msg
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hii','hello','status'])
