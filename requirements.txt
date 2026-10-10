@@ -2,3 +2,4 @@ pyTelegramBotAPI
 yfinance
 pytz
 requests
+openai
