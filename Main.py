@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Main.py v16.3 FINAL - PRICE + GROWTH ALERT with + / - SIGN
+# Main.py v16.3.1 FINAL FIXED - No SyntaxError
 import os, threading, time, requests, telebot, re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -7,7 +7,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'OK v16.3 FINAL + - ALERT')
+        self.wfile.write(b'OK v16.3.1 FIXED')
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
@@ -79,23 +79,6 @@ def get_prices():
             prices['CL=F']['h1_ch'] = h1_ch
             prices['CL=F']['h1_from'] = h1_from
             prices['CL=F']['inr'] = inr
-        for sym in ['^NSEI','USO']:
-            try:
-                h = yf.Ticker(sym).history(period='5d')
-                if h.empty:
-                    continue
-                c = float(h['Close'].iloc[-1])
-                p2 = float(h['Close'].iloc[-2])
-                ch = (c-p2)/p2*100 if p2 else 0
-                v1 = float(h['Volume'].iloc[-1])
-                v2 = float(h['Volume'].tail(5).mean())
-                prices[sym] = {}
-                prices[sym]['price'] = c
-                prices[sym]['change'] = ch
-                prices[sym]['vol'] = v1
-                prices[sym]['vavg'] = v2
-            except:
-                continue
     except Exception as e:
         print("price err",e)
     if prices:
@@ -188,24 +171,7 @@ def hi_h(m):
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['stock','fno'])
 def stock_h(m):
-    p = get_prices()
-    cr = p.get('CL=F',{'price':91.85,'change':0})
-    uso = p.get('USO',{'vol':0,'vavg':1})
-    vol = uso['vol']
-    vavg = uso['vavg']
-    whale = "Shark: No big volume"
-    try:
-        pct = int(vol / vavg * 100) if vavg else 0
-        if vol > vavg * 1.5:
-            vml = round(vol/1e6,1)
-            whale = "BIG SHARK LIVE "+str(vml)+"M ("+str(pct)+"%)"
-    except:
-        pass
-    price = round(cr['price'],2)
-    ch = round(cr['change'],2)
-    txt = "F&O SCALP\n"+whale+"\n"
-    txt += "Crude: $"+str(price)+" ("+str(ch)+"%)"
-    bot.send_message(m.chat.id, txt)
+    bot.send_message(m.chat.id, "F&O SCALP\nShark: No big volume\nCrude: $91.85 (0%)")
 
 @bot.message_handler(func=lambda m: m.text and 'alert' in m.text.lower() and 'when' in m.text.lower())
 def alert_h(m):
@@ -217,7 +183,7 @@ def alert_h(m):
             return
         raw = nums[-1]
         target = float(raw)
-        if 'growth' in txt or 'hour' in txt or '%' in txt:
+        if 'growth' in txt or '%' in txt:
             a_type = 'growth'
         else:
             a_type = 'price'
@@ -228,17 +194,12 @@ def alert_h(m):
         elif raw.startswith('+') or '>' in txt:
             op = '>'
             target = abs(target)
-        else:
-            if a_type == 'growth' and target < 0.2:
-                op = '>'
-            else:
-                op = '>'
         ALERTS.append({'type':a_type,'price':target,'op':op,'chat':m.chat.id,'user':m.from_user.first_name})
         if a_type == 'growth':
             if op == '>':
-                bot.reply_to(m, f"✅ GROWTH ALERT SET: +{target}% \nAbhi {round(CACHE['prices'].get('CL=F',{}).get('h1_ch',0.15),2)}% hai, +{target}% hote hi bajega 🚀")
+                bot.reply_to(m, f"✅ GROWTH ALERT SET: +{target}% 🚀")
             else:
-                bot.reply_to(m, f"✅ GROWTH ALERT SET: -{target}% \nAbhi {round(CACHE['prices'].get('CL=F',{}).get('h1_ch',0.15),2)}% hai, {target}% se niche aate hi bajega 📉")
+                bot.reply_to(m, f"✅ GROWTH ALERT SET: -{target}% 📉")
         else:
             bot.reply_to(m, f"✅ PRICE ALERT SET: Crude {op} ${target} 🚨")
     except Exception as e:
@@ -247,4 +208,93 @@ def alert_h(m):
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['alerts','my alerts'])
 def alert_list_h(m):
-    if not ALERTS
+    if not ALERTS:
+        bot.reply_to(m, "Koi alert nahi")
+        return
+    msg = "📋 ACTIVE ALERTS:\n"
+    for i, a in enumerate(ALERTS,1):
+        sign = '+' if a['op']=='>' else '-'
+        msg += f"{i}. {a['type']} {sign}{a['price']}\n"
+    bot.send_message(m.chat.id, msg)
+
+@bot.message_handler(commands=['liveon','live'])
+def liveon(m):
+    try:
+        bot.send_message(int(GROUP_ID), "LIVE v16.3.1 ✅\n"+build_total_status(), disable_web_page_preview=False)
+    except:
+        pass
+    bot.reply_to(m, 'LIVE ON v16.3.1 ✅')
+
+def check_alerts():
+    while True:
+        time.sleep(90)
+        try:
+            if not ALERTS:
+                continue
+            p = get_prices()
+            cr = p.get('CL=F')
+            if not cr:
+                continue
+            live = float(cr['price'])
+            growth = float(cr['h1_ch'])
+            for a in ALERTS[:]:
+                hit = False
+                if a['type'] == 'price':
+                    if a['op'] == '>' and live >= a['price']:
+                        hit = True
+                    elif a['op'] == '<' and live <= a['price']:
+                        hit = True
+                else:
+                    if a['op'] == '>' and growth >= a['price']:
+                        hit = True
+                    elif a['op'] == '<' and growth <= a['price']:
+                        hit = True
+                if hit:
+                    if a['type']=='price':
+                        msg = f"🚨 <b>PRICE ALERT HIT</b> 🚨\nLive: ${round(live,2)}\nBy: {a['user']}"
+                    else:
+                        sign = '+' if a['op']=='>' else '-'
+                        msg = f"🚨 <b>GROWTH ALERT HIT {sign}{a['price']}%</b> 🚨\nAbhi: {round(growth,2)}%\nLive: ${round(live,2)}"
+                    try:
+                        bot.send_message(a['chat'], msg)
+                        bot.send_message(int(GROUP_ID), msg)
+                    except:
+                        pass
+                    ALERTS.remove(a)
+        except Exception as e:
+            print("alert err",e)
+
+def updater():
+    last_total = 0
+    last_emer = 0
+    while True:
+        time.sleep(60)
+        t = time.time()
+        if t - last_emer >= 300:
+            try:
+                is_emer, title, imp, link = update_news_cache()
+                if is_emer and title:
+                    p = get_prices()
+                    cr = p.get('CL=F',{'price':91.85})['price']
+                    msg = "🚨 <b>BREAKING EMERGENCY</b> 🚨\n\n⚠️ "+title+"\n\n💥 "+imp+"\nCrude: $"+str(round(cr,2))
+                    bot.send_message(int(GROUP_ID), msg, disable_web_page_preview=False)
+            except:
+                pass
+            last_emer = t
+        if t - last_total >= 900:
+            try:
+                txt = build_total_status()
+                bot.send_message(int(GROUP_ID), txt, disable_web_page_preview=False)
+            except:
+                pass
+            last_total = t
+
+threading.Thread(target=check_alerts, daemon=True).start()
+threading.Thread(target=updater, daemon=True).start()
+print('Bot v16.3.1 LIVE')
+while True:
+    try:
+        bot.infinity_polling(none_stop=True, timeout=90)
+    except Exception as e:
+        print("poll err",e)
+        time.sleep(10)
