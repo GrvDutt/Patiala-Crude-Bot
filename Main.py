@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# CRUDE BOT v12.2 NOVA - WHALE FINAL FIXED
+# CRUDE BOT v12.3 NOVA - WHALE FINAL - SYNTAX FIXED
 import os, threading, time, requests, telebot, re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -7,7 +7,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'OK v12.2 WHALE FINAL')
+        self.wfile.write(b'OK v12.3')
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
@@ -26,6 +26,7 @@ USER_ALERTS=[]
 ALERT_ID=0
 LAST_BIG=set()
 LAST_BIG_BUYER=0
+
 SYMBOLS=['CL=F','^NSEI','^BSESN','GC=F','INR=X','USO']
 
 def get_prices():
@@ -44,8 +45,10 @@ def get_prices():
                 v1=float(h['Volume'].iloc[-1])
                 v2=float(h['Volume'].tail(5).mean())
                 prices[sym]={'price':c,'change':ch,'vol':v1,'vavg':v2}
-            except: continue
-    except: pass
+            except:
+                continue
+    except:
+        pass
     if prices:
         CACHE['prices']=prices
         CACHE['time']=time.time()
@@ -71,15 +74,15 @@ def send_breaking_news(to_group=True):
                 impact='BEARISH 90% DOWN'
             else:
                 impact='SIDEWAY 50%'
-            msg=f'BREAKING - CRUDE IMPACT\n\n{ e.title }\n\nIMPACT: {impact}\nCrude: ${cr:.2f}\n\nNews - Abhi'
+            msg="BREAKING - CRUDE IMPACT\n\n" + e.title + "\n\nIMPACT: " + impact + "\nCrude: $" + str(round(cr,2))
             if not to_group:
                 return msg
             bot.send_message(int(GROUP_ID), msg)
             return msg
         if not to_group:
-            return f'BREAKING - CRUDE IMPACT\nMarket stable Crude ${cr:.2f}'
-    except:
-        return 'News loading...'
+            return "BREAKING - CRUDE IMPACT\nMarket stable Crude $" + str(round(cr,2))
+    except Exception as ex:
+        return "News loading " + str(ex)
 
 def check_big_buyers():
     global LAST_BIG_BUYER
@@ -88,38 +91,4 @@ def check_big_buyers():
     try:
         p=get_prices()
         uso=p.get('USO')
-        cr=p.get('CL=F',{'price':91})
-        if not uso:
-            return
-        if uso['vol']>uso['vavg']*1.5 and uso['change']>1.0:
-            bot.send_message(int(GROUP_ID), f'BIG BUYER LIVE\nUSO {uso["vol"]/1e6:.1f}M vol ({uso["vol"]/uso["vavg"]*100:.0f}%) pump +{uso["change"]:.2f}%\nCrude ${cr["price"]:.2f}')
-            LAST_BIG_BUYER=time.time()
-        elif uso['vol']>uso['vavg']*1.5 and uso['change']<-1.0:
-            bot.send_message(int(GROUP_ID), f'BIG SELLER LIVE\nUSO dump {uso["change"]:.2f}%\nCrude ${cr["price"]:.2f}')
-            LAST_BIG_BUYER=time.time()
-    except: pass
-
-HELP_TXT="CRUDE BOT v12.2 NOVA WHALE FINAL\n\nALL COMMANDS:\n? /? /command command help - ye help\n hi / crude - total status\n news - breaking crude impact\n stock - f&o + whale vol\n alert when crude > 65\n alerts\n /liveon - pin start\n\nBIG BUYER AUTO 30min"
-
-@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hello','crude','hi crude'])
-def hi_h(m):
-    p=get_prices()
-    cr=p.get('CL=F',{'price':91.85,'change':0.39})
-    bot.send_message(m.chat.id, f'CRUDE TOTAL STATUS\nCurrent: ${cr["price"]:.2f} ({cr["change"]:+.2f}%)')
-
-@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['news','new'])
-def news_h(m):
-    txt=send_breaking_news(to_group=False)
-    bot.send_message(m.chat.id, txt)
-    bot.send_message(int(GROUP_ID), txt)
-
-@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['stock','f&o','fno'])
-def stock_h(m):
-    p=get_prices()
-    cr=p.get('CL=F',{'price':91.85,'change':0.39})
-    uso=p.get('USO',{'vol':0,'vavg':1,'change':0})
-    if uso['vol']>uso['vavg']*1.5:
-        whale=f"Whale Vol: {uso['vol']/1e6:.1f}M ({uso['vol']/uso['vavg']*100:.0f}%) LIVE"
-    else:
-        whale="Whale: No big volume"
-    bot.send_message(m.chat.id, f'F&O SCALP
+        cr=p
