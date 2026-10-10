@@ -1,5 +1,5 @@
 pyTelegramBotAPI
 yfinance
-pytz
 requests
-openai
+pytz
+lxml
