@@ -5,7 +5,7 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b"OK v8.4 WORLD LEADERS LIVE")
+  self.wfile.write(b"OK v8.5 ULTRA SAFE LIVE")
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
@@ -86,7 +86,6 @@ def get_technical_chance(sym='CL=F'):
     if price > ma20: bullish_pct+=10
     if price > ma50: bullish_pct+=10
     if rsi_now > 50: bullish_pct+=10
-    if ma20 > ma50: bullish_pct+=5
     bullish_pct = max(15, min(85, bullish_pct))
     trend = 'BULLISH' if bullish_pct>=60 else 'BEARISH' if bullish_pct<=40 else 'STABLE'
     return bullish_pct, trend, ma20, ma50, rsi_now, atr
@@ -95,13 +94,13 @@ def get_technical_chance(sym='CL=F'):
 
 def impact(head):
  hl = head.lower()
- red_words = ['fall','down','drops','plunge','decline','weak','selloff','tariff','sanction','attack','missile','airstrike','war','conflict','strike']
- green_words = ['cut','rally','buying','ceasefire','peace','stimulus','rate cut','deal']
+ red_words = ['fall','down','drops','plunge','decline','selloff','tariff','sanction','attack','missile','war']
+ green_words = ['rally','buying','ceasefire','peace','stimulus','cut']
  if any(x in hl for x in red_words):
   return 'RED BEARISH'
  if any(x in hl for x in green_words):
   return 'GREEN BULLISH'
- return 'BLUE NEUTRAL'
+ return 'NEUTRAL'
 
 def get_rss_news(query, limit=2):
   try:
@@ -110,7 +109,7 @@ def get_rss_news(query, limit=2):
     txt = ''
     if feed.entries:
       for i in range(min(limit, len(feed.entries))):
-        h = feed.entries[i].title[:85].replace('<','').replace('>','')
+        h = feed.entries[i].title[:80].replace('<','').replace('>','').replace("'","").replace('"','')
         imp = impact(h)
         txt += str(i+1) + '. ' + h + ' [' + imp + ']\n'
     return txt
@@ -118,35 +117,23 @@ def get_rss_news(query, limit=2):
     return ''
 
 def get_world_leaders_impact():
-  # This query covers ANY US President + All Major World Leaders + Attacks
-  # Future proof - No hardcoded Trump
-  queries = [
-    'US+President+tariff+trade',
-    'Putin+Russia+Ukraine+war',
-    'Xi+Jinping+China+Taiwan',
-    'Netanyahu+Israel+Iran+attack',
-    'OPEC+Saudi+oil+cut',
-    'missile+attack+airstrike+Middle+East'
-  ]
+  queries = ['US President tariff trade','Putin Russia Ukraine war','Xi Jinping China Taiwan','Netanyahu Israel Iran attack','OPEC Saudi oil cut','missile attack Middle East']
   final_txt = ''
   for q in queries:
     t = get_rss_news(q, 1)
     if t:
       final_txt += t
-  return final_txt[:600] # limit length
+  return final_txt[:600]
 
 def get_market_variables():
   try:
     vix = get_data('^INDIAVIX')
     usdinr = get_data('INR=X')
-    dxy = get_data('DX-Y.NYB')
     txt = ''
     if vix:
-      txt += 'VIX: ' + str(round(vix['price'],2)) + ' ' + ('[High Fear]' if vix['price']>15 else '[Low Fear]') + '\n'
+      txt += 'VIX: ' + str(round(vix['price'],2)) + '\n'
     if usdinr:
-      txt += 'USD/INR: ' + str(round(usdinr['price'],2)) + ' ' + color_fmt(usdinr['change'], '') + '\n'
-    if dxy:
-      txt += 'DXY: ' + str(round(dxy['price'],2)) + '\n'
+      txt += 'USD INR: ' + str(round(usdinr['price'],2)) + '\n'
     return txt
   except:
     return ''
@@ -158,26 +145,3 @@ def make_hi_text():
  sensex = get_data('^BSESN')
  bull_pct, trend, ma20, ma50, rsi_now, atr = get_technical_chance('CL=F')
  now = datetime.now(IST).strftime('%I:%M %p, %d %b')
-
- crude_news = get_rss_news('crude+oil+OPEC+inventory', 2)
- nifty_news = get_rss_news('Nifty+Sensex+RBI+FII+DII', 2)
- world_news = get_world_leaders_impact()
- bulk_news = get_rss_news('NSE+Bulk+Deal+Block+Deal+FII', 2)
- market_vars = get_market_variables()
-
- msg = '<b>PATIALA CRUDE LIVE - ' + now + '</b>\n\n'
- if crude:
-  label = '$' + str(round(crude['price'],2)) + ' (Rs ' + str(int(crude['price']*inr)) + ')'
-  msg += 'CRUDE OIL\n' + color_fmt(crude['change'], label) + '\n'
-  msg += 'Trend: ' + trend + ' [' + str(bull_pct) + '%] RSI ' + str(int(rsi_now)) + '\n\n'
- if nifty:
-  msg += 'NIFTY: ' + color_fmt(nifty['change'], str(round(nifty['price'],2))) + '\n'
- if sensex:
-  msg += 'SENSEX: ' + color_fmt(sensex['change'], str(round(sensex['price'],2))) + '\n'
- msg += '\n' + market_vars + '\n'
- msg += '<b>CRUDE IMPACT</b>\n' + crude_news + '\n'
- msg += '<b>NIFTY/SENSEX IMPACT</b>\n' + nifty_news + '\n'
- msg += '<b>WORLD LEADERS + ATTACK / WAR ALERT</b>\n'
- msg += 'Covers: US President (Any), Putin, Xi, Netanyahu, Iran, OPEC\n'
- msg += world_news + '\n\n'
- msg += '<b>BIG TRADERS /
