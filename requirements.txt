@@ -1,5 +1,1 @@
-pyTelegramBotAPI
-yfinance
-pytz
-requests
-feedparser
+pip install pyTelegramBotAPI pytz requests
