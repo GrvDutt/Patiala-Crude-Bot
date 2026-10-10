@@ -247,4 +247,4 @@ def alert_h(m):
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['alerts','my alerts'])
 def alert_list_h(m):
-    if not ALERT
+    if not ALERTS
