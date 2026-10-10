@@ -5,7 +5,7 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b"OK v8.5 ULTRA SAFE LIVE")
+  self.wfile.write(b"OK v8.6 GUARANTEED LIVE")
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
@@ -13,135 +13,122 @@ class H(BaseHTTPRequestHandler):
 
 def run_health():
  port = int(os.environ.get("PORT", 10000))
+ print("Health server starting on port", port)
  HTTPServer(('0.0.0.0', port), H).serve_forever()
 threading.Thread(target=run_health, daemon=True).start()
 
-import pytz, requests, yfinance as yf, telebot, feedparser
+print("Step 1 - Health OK")
+import pytz, requests, telebot, feedparser
 from datetime import datetime
 import time
+print("Step 2 - Basic imports OK")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = int(os.getenv("GROUP_ID", "-1004448478970"))
+GROUP_ID = os.getenv("GROUP_ID", "-1004448478970")
+print("Step 3 - Token check:", "FOUND" if BOT_TOKEN else "MISSING - SET IN RENDER ENV!")
+
+if not BOT_TOKEN:
+    print("ERROR: BOT_TOKEN missing in Render Environment!")
+
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML", threaded=False)
+try:
+    bot.delete_webhook(drop_pending_updates=True)
+    print("Step 4 - Webhook deleted, polling mode ON")
+except Exception as e:
+    print("Webhook delete error:", e)
+
 IST = pytz.timezone('Asia/Kolkata')
 pinned_id = None
 
-ALERTS_FILE = 'alerts.json'
-alerts = {}
-if os.path.exists(ALERTS_FILE):
- try:
-  alerts = json.loads(open(ALERTS_FILE, 'r').read())
- except:
-  alerts = {}
-
-def save_alerts():
- try:
-  open(ALERTS_FILE, 'w').write(json.dumps(alerts))
- except:
-  pass
-
-def get_inr():
- try:
-  d = requests.get('https://open.er-api.com/v6/latest/USD', timeout=5).json()
-  return d['rates']['INR']
- except:
-  return 88.0
-
-def get_data(sym):
- try:
-  h = yf.Ticker(sym).history(period='2d')
-  if h.empty:
-   return None
-  c = float(h['Close'].iloc[-1])
-  p = float(h['Close'].iloc[-2]) if len(h)>1 else c
-  ch = ((c-p)/p*100) if p else 0
-  return {'price':c,'change':ch}
- except:
-  return None
-
-def color_fmt(ch, label):
- if ch > 0.10:
-  return '[UP] ' + label + ' (+' + str(round(ch,2)) + '%)'
- if ch < -0.10:
-  return '[DOWN] ' + label + ' (' + str(round(ch,2)) + '%)'
- return '[STABLE] ' + label + ' (' + str(round(ch,2)) + '%)'
-
-def get_technical_chance(sym='CL=F'):
+def get_data_safe(sym):
   try:
-    df = yf.Ticker(sym).history(period='6mo')
-    if len(df) < 60:
-     return 50, 'STABLE', 0, 0, 50, 0
-    close = df['Close']
-    ma20 = float(close.rolling(20).mean().iloc[-1])
-    ma50 = float(close.rolling(50).mean().iloc[-1])
-    price = float(close.iloc[-1])
-    delta = close.diff()
-    gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
-    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    rsi_now = float(rsi.iloc[-1])
-    atr = float((df['High'] - df['Low']).rolling(14).mean().iloc[-1])
-    bullish_pct = 50
-    if price > ma20: bullish_pct+=10
-    if price > ma50: bullish_pct+=10
-    if rsi_now > 50: bullish_pct+=10
-    bullish_pct = max(15, min(85, bullish_pct))
-    trend = 'BULLISH' if bullish_pct>=60 else 'BEARISH' if bullish_pct<=40 else 'STABLE'
-    return bullish_pct, trend, ma20, ma50, rsi_now, atr
-  except:
-    return 50, 'STABLE', 0, 0, 50, 0
+    import yfinance as yf
+    h = yf.Ticker(sym).history(period='2d')
+    if h.empty: return None
+    c = float(h['Close'].iloc[-1])
+    p = float(h['Close'].iloc[-2]) if len(h)>1 else c
+    ch = ((c-p)/p*100) if p else 0
+    return {'price':c,'change':ch}
+  except Exception as e:
+    print("get_data error for", sym, e)
+    return None
 
-def impact(head):
- hl = head.lower()
- red_words = ['fall','down','drops','plunge','decline','selloff','tariff','sanction','attack','missile','war']
- green_words = ['rally','buying','ceasefire','peace','stimulus','cut']
- if any(x in hl for x in red_words):
-  return 'RED BEARISH'
- if any(x in hl for x in green_words):
-  return 'GREEN BULLISH'
- return 'NEUTRAL'
-
-def get_rss_news(query, limit=2):
+def get_rss_news(query, limit=1):
   try:
     url = 'https://news.google.com/rss/search?q=' + query + '&hl=en-IN&gl=IN&ceid=IN:en'
     feed = feedparser.parse(url)
     txt = ''
     if feed.entries:
       for i in range(min(limit, len(feed.entries))):
-        h = feed.entries[i].title[:80].replace('<','').replace('>','').replace("'","").replace('"','')
-        imp = impact(h)
-        txt += str(i+1) + '. ' + h + ' [' + imp + ']\n'
+        h = feed.entries[i].title[:70].replace('<','').replace('>','')
+        txt += str(i+1) + '. ' + h + '\n'
     return txt
-  except:
-    return ''
-
-def get_world_leaders_impact():
-  queries = ['US President tariff trade','Putin Russia Ukraine war','Xi Jinping China Taiwan','Netanyahu Israel Iran attack','OPEC Saudi oil cut','missile attack Middle East']
-  final_txt = ''
-  for q in queries:
-    t = get_rss_news(q, 1)
-    if t:
-      final_txt += t
-  return final_txt[:600]
-
-def get_market_variables():
-  try:
-    vix = get_data('^INDIAVIX')
-    usdinr = get_data('INR=X')
-    txt = ''
-    if vix:
-      txt += 'VIX: ' + str(round(vix['price'],2)) + '\n'
-    if usdinr:
-      txt += 'USD INR: ' + str(round(usdinr['price'],2)) + '\n'
-    return txt
-  except:
-    return ''
+  except Exception as e:
+    print("RSS error", e)
+    return 'News temporarily unavailable\n'
 
 def make_hi_text():
- inr = get_inr()
- crude = get_data('CL=F')
- nifty = get_data('^NSEI')
- sensex = get_data('^BSESN')
- bull_pct, trend, ma20, ma50, rsi_now, atr = get_technical_chance('CL=F')
- now = datetime.now(IST).strftime('%I:%M %p, %d %b')
+ try:
+  crude = get_data_safe('CL=F')
+  nifty = get_data_safe('^NSEI')
+  now = datetime.now(IST).strftime('%I:%M %p, %d %b')
+  msg = 'PATIALA CRUDE LIVE - ' + now + '\n\n'
+  if crude:
+    msg += 'CRUDE: $' + str(round(crude['price'],2)) + ' (' + str(round(crude['change'],2)) + '%)\n'
+  else:
+    msg += 'CRUDE: Fetching... (yfinance slow)\n'
+  if nifty:
+    msg += 'NIFTY: ' + str(round(nifty['price'],2)) + ' (' + str(round(nifty['change'],2)) + '%)\n'
+  msg += '\nCRUDE NEWS\n' + get_rss_news('crude oil OPEC', 2) + '\n'
+  msg += 'NIFTY IMPACT\n' + get_rss_news('Nifty Sensex RBI', 1) + '\n'
+  msg += 'WORLD LEADERS AND WAR\n' + get_rss_news('US President Putin Israel Iran attack', 2) + '\n'
+  msg += 'BIG TRADERS\n' + get_rss_news('NSE Bulk Deal FII', 1) + '\n'
+  return msg
+ except Exception as e:
+  print("make_hi_text error", e)
+  return 'Bot LIVE but data error: ' + str(e) + '\nTry again in 30 sec'
+
+@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hii','hello','status'])
+def hi_handler(m):
+ print("HI received from", m.chat.id, m.text)
+ try:
+  bot.send_message(m.chat.id, make_hi_text())
+ except Exception as e:
+  print("Send error", e)
+  bot.send_message(m.chat.id, "Bot LIVE - data fetching, try hi again in 10 sec")
+
+@bot.message_handler(commands=['liveon','pinon'])
+def liveon(m):
+ global pinned_id
+ msg = bot.send_message(int(GROUP_ID), make_hi_text())
+ pinned_id = msg.message_id
+ try:
+  bot.pin_chat_message(int(GROUP_ID), pinned_id, disable_notification=True)
+ except:
+  pass
+
+def updater():
+ global pinned_id
+ while True:
+  try:
+   time.sleep(900)
+   print("15 min update tick")
+   if pinned_id:
+    try:
+     bot.edit_message_text(make_hi_text(), int(GROUP_ID), pinned_id)
+    except Exception as e:
+     print("Edit error", e)
+  except Exception as e:
+   print("Updater error", e)
+   time.sleep(60)
+
+threading.Thread(target=updater, daemon=True).start()
+
+print("Step 5 - Starting polling...")
+while True:
+    try:
+        print("Bot polling started v8.6 GUARANTEED LIVE")
+        bot.infinity_polling(none_stop=True, timeout=90, skip_pending=True)
+    except Exception as e:
+        print("Polling error", e)
+        time.sleep(10)
