@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-# Main.py v16 FINAL - TOTAL STATUS INR + 15 MIN + EMERGENCY
-import os, threading, time, requests, telebot
+# Main.py v16.3 FINAL - PRICE + GROWTH ALERT with + / - SIGN
+import os, threading, time, requests, telebot, re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'OK v16 FINAL 15min+emergency')
+        self.wfile.write(b'OK v16.3 FINAL + - ALERT')
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
@@ -23,7 +23,6 @@ threading.Thread(target=run_health, daemon=True).start()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GROUP_ID = os.getenv('GROUP_ID','-1004448478970')
 if not BOT_TOKEN:
-    print("TOKEN missing")
     while True:
         time.sleep(60)
 
@@ -31,6 +30,7 @@ bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML', threaded=False)
 CACHE = {'prices':{}, 'time':0, 'inr':88.5}
 LAST = set()
 LAST_NEWS = {'title':'Panic jaisa mahol','imp':'BULLISH 🔼 70% upar - OPEC cut','link':'https://news.google.com/search?q=crude+oil'}
+ALERTS = []
 
 def get_inr():
     try:
@@ -132,15 +132,14 @@ def update_news_cache():
             return emergency, clean, imp, e.link
         return False, None, None, None
     except Exception as ex:
-        print("news cache err",ex)
+        print("news err",ex)
         return False, None, None, None
 
 def build_total_status():
     p = get_prices()
     cr = p.get('CL=F')
     if not cr:
-        return "📊 <b>CRUDE TOTAL STATUS</b>\n\nBot LIVE ✅ Price load ho raha hai"
-    # news cache already updated by updater, but refresh if empty
+        return "📊 <b>CRUDE TOTAL STATUS</b>\n\nBot LIVE ✅"
     title = LAST_NEWS['title']
     imp = LAST_NEWS['imp']
     link = LAST_NEWS['link']
@@ -163,7 +162,6 @@ def build_total_status():
     week_ch = round(cr['week_ch'],2)
     curr_tag = "BULLISH 🟢🔼" if live>prev else "BEARISH 🔴🔻"
     week_tag = "BULLISH 🚀" if week_ch>0 else "BEARISH 📉"
-
     t1 = "📊 <b>CRUDE TOTAL STATUS</b>\n\n"
     t2 = "1. CURRENT: "+curr_tag+"\n"
     t3 = "Live: $"+str(round(live,2))+" | ₹"+str(live_inr)+"\n"
@@ -181,7 +179,7 @@ def build_total_status():
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip()=='news')
 def news_h(m):
-    bot.send_message(m.chat.id, "🗞️ News ab <b>hi crude</b> me hi aati hai\n<i>hi</i> ya <i>crude</i> likho", parse_mode='HTML')
+    bot.send_message(m.chat.id, "🗞️ News ab <b>hi crude</b> me hi aati hai", parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hello','crude','hi crude'])
 def hi_h(m):
@@ -209,56 +207,44 @@ def stock_h(m):
     txt += "Crude: $"+str(price)+" ("+str(ch)+"%)"
     bot.send_message(m.chat.id, txt)
 
-@bot.message_handler(commands=['liveon','live'])
-def liveon(m):
+@bot.message_handler(func=lambda m: m.text and 'alert' in m.text.lower() and 'when' in m.text.lower())
+def alert_h(m):
     try:
-        bot.send_message(int(GROUP_ID), "LIVE v16 FINAL 15 MIN + EMERGENCY ✅\n"+build_total_status(), disable_web_page_preview=False)
-    except:
-        pass
-    bot.reply_to(m, 'LIVE ON v16 ✅')
-
-def updater():
-    last_total = 0
-    last_emergency_check = 0
-    while True:
-        time.sleep(60)
-        t = time.time()
-        # 1. Emergency check har 5 min
-        if t - last_emergency_check >= 300:
-            try:
-                is_emergency, title, imp, link = update_news_cache()
-                if is_emergency and title:
-                    p = get_prices()
-                    cr = p.get('CL=F',{'price':91.85})['price']
-                    msg = "🚨 <b>BREAKING EMERGENCY</b> 🚨\n\n"
-                    msg += "⚠️ "+title+"\n\n"
-                    msg += "💥 "+imp+"\n"
-                    msg += "Crude: $"+str(round(cr,2))+"\n\n"
-                    msg += "<a href=\""+link+"\">Full News - Click</a>"
-                    bot.send_message(int(GROUP_ID), msg, disable_web_page_preview=False)
-                    print("Emergency sent")
-            except Exception as ex:
-                print("emergency err",ex)
-            last_emergency_check = t
-        # 2. Total status har 15 min pakka
-        if t - last_total >= 900:
-            try:
-                txt = build_total_status()
-                bot.send_message(int(GROUP_ID), txt, disable_web_page_preview=False)
-                print("15min total sent")
-            except Exception as ex:
-                print("total err",ex)
-                try:
-                    bot.send_message(int(GROUP_ID), "📊 Bot LIVE ✅ - 15 min check")
-                except:
-                    pass
-            last_total = t
-
-threading.Thread(target=updater, daemon=True).start()
-print('Bot v16 FINAL LIVE')
-while True:
-    try:
-        bot.infinity_polling(none_stop=True, timeout=90)
+        txt = m.text.lower()
+        nums = re.findall(r'[+-]?\d+\.?\d*', txt)
+        if not nums:
+            bot.reply_to(m, "Use:\nalert when growth +0.30\nor\nalert when growth -0.10")
+            return
+        raw = nums[-1]
+        target = float(raw)
+        if 'growth' in txt or 'hour' in txt or '%' in txt:
+            a_type = 'growth'
+        else:
+            a_type = 'price'
+        op = '>'
+        if raw.startswith('-') or '<' in txt:
+            op = '<'
+            target = abs(target)
+        elif raw.startswith('+') or '>' in txt:
+            op = '>'
+            target = abs(target)
+        else:
+            if a_type == 'growth' and target < 0.2:
+                op = '>'
+            else:
+                op = '>'
+        ALERTS.append({'type':a_type,'price':target,'op':op,'chat':m.chat.id,'user':m.from_user.first_name})
+        if a_type == 'growth':
+            if op == '>':
+                bot.reply_to(m, f"✅ GROWTH ALERT SET: +{target}% \nAbhi {round(CACHE['prices'].get('CL=F',{}).get('h1_ch',0.15),2)}% hai, +{target}% hote hi bajega 🚀")
+            else:
+                bot.reply_to(m, f"✅ GROWTH ALERT SET: -{target}% \nAbhi {round(CACHE['prices'].get('CL=F',{}).get('h1_ch',0.15),2)}% hai, {target}% se niche aate hi bajega 📉")
+        else:
+            bot.reply_to(m, f"✅ PRICE ALERT SET: Crude {op} ${target} 🚨")
     except Exception as e:
-        print("poll err",e)
-        time.sleep(10)
+        print(e)
+        bot.reply_to(m, "Format: alert when growth +0.30")
+
+@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['alerts','my alerts'])
+def alert_list_h(m):
+    if not ALERT
