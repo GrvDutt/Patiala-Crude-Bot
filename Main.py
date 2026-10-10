@@ -7,7 +7,7 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b'OK v9.6 PREMIUM UI')
+  self.wfile.write(b'OK v9.7 GLOBAL FULL')
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
@@ -17,14 +17,16 @@ def run_health():
  port = int(os.environ.get('PORT', 10000))
  HTTPServer(('0.0.0.0', port), H).serve_forever()
 threading.Thread(target=run_health, daemon=True).start()
+print('Step1 Health OK')
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GROUP_ID = os.getenv('GROUP_ID', '-1004448478970')
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML', threaded=False)
 try:
     bot.delete_webhook(drop_pending_updates=True)
-except:
-    pass
+    print('Step2 Webhook deleted')
+except Exception as e:
+    print('Webhook err', e)
 
 IST = pytz.timezone('Asia/Kolkata')
 pinned_id = None
@@ -38,9 +40,10 @@ def get_data_safe(sym):
             return None
         c = float(h['Close'].iloc[-1])
         p = float(h['Close'].iloc[-2]) if len(h) > 1 else c
-        ch = ((c - p) / p * 100) if p!= 0 else 0
+        ch = ((c - p) / p * 100) if p != 0 else 0
         return {'price': c, 'change': ch}
-    except:
+    except Exception as e:
+        print('data err', e)
         return None
 
 def fetch_news_fast(query):
@@ -72,18 +75,22 @@ def fetch_news_fast(query):
         if txt == '':
             return 'No major breaking in last 24h - Market stable\n'
         return txt
-    except:
+    except Exception as e:
+        print('News error', e)
         return 'Market stable\n'
 
 def refresh_cache():
     try:
+        print('Refreshing cache...')
         CACHE['news']['crude'] = fetch_news_fast('crude oil OPEC price today')
         CACHE['news']['nifty'] = fetch_news_fast('NSE Nifty Sensex FII DII today')
         CACHE['news']['world'] = fetch_news_fast('Trump Modi Putin Israel Iran war today')
         CACHE['news']['bulk'] = fetch_news_fast('NSE bulk block deal today')
+        CACHE['news']['global'] = fetch_news_fast('US stock market Europe market today')
         CACHE['time'] = time.time()
-    except:
-        pass
+        print('Cache OK')
+    except Exception as e:
+        print('Cache error', e)
 
 threading.Thread(target=refresh_cache, daemon=True).start()
 
@@ -98,22 +105,25 @@ def make_hi_text():
         vix = get_data_safe('^INDIAVIX')
         usdinr = get_data_safe('INR=X')
         gold = get_data_safe('GC=F')
-        now = datetime.now(IST).strftime('%I:%M %p, %d %b')
+        sp500 = get_data_safe('^GSPC')
+        nasdaq = get_data_safe('^IXIC')
+        dow = get_data_safe('^DJI')
+        ftse = get_data_safe('^FTSE')
+        dax = get_data_safe('^GDAXI')
+        nikkei = get_data_safe('^N225')
 
-        # ---- PREMIUM UI ----
+        now = datetime.now(IST).strftime('%I:%M %p, %d %b')
         msg = '<b>PATIALA CRUDE LIVE</b>\n'
         msg += now + '\n'
         msg += '━━━━━━━━━━━━━━━━━━━━\n\n'
 
-        # CRUDE
         if crude:
             rs_val = int(crude['price'] * usdinr['price']) if usdinr else 0
             col = '🟢' if crude['change'] >= 0 else '🔴'
             msg += '<b>CRUDE OIL</b>\n'
             msg += col + ' <b>$' + str(round(crude['price'],2)) + ' (Rs ' + str(rs_val) + ')</b> (' + str(round(crude['change'],2)) + '%)\n\n'
 
-        # INDEX
-        msg += '<b>MARKET OVERVIEW</b>\n'
+        msg += '<b>INDIA MARKET</b>\n'
         if nifty:
             col = '🟢' if nifty['change'] >= 0 else '🔴'
             msg += col + ' NIFTY 50: <b>' + str(round(nifty['price'],2)) + '</b> (' + str(round(nifty['change'],2)) + '%)\n'
@@ -128,23 +138,39 @@ def make_hi_text():
         if usdinr:
             msg += '🔵 USD-INR: <b>' + str(round(usdinr['price'],2)) + '</b>\n'
 
+        msg += '\n<b>GLOBAL MARKET</b>\n'
+        msg += '<b>USA</b>:\n'
+        if sp500:
+            col = '🟢' if sp500['change'] >= 0 else '🔴'
+            msg += col + ' S&P 500: <b>' + str(round(sp500['price'],2)) + '</b> (' + str(round(sp500['change'],2)) + '%)\n'
+        if nasdaq:
+            col = '🟢' if nasdaq['change'] >= 0 else '🔴'
+            msg += col + ' NASDAQ: <b>' + str(round(nasdaq['price'],2)) + '</b> (' + str(round(nasdaq['change'],2)) + '%)\n'
+        if dow:
+            col = '🟢' if dow['change'] >= 0 else '🔴'
+            msg += col + ' DOW: <b>' + str(round(dow['price'],2)) + '</b> (' + str(round(dow['change'],2)) + '%)\n'
+
+        msg += '<b>EUROPE</b>:\n'
+        if ftse:
+            col = '🟢' if ftse['change'] >= 0 else '🔴'
+            msg += col + ' FTSE 100: <b>' + str(round(ftse['price'],2)) + '</b> (' + str(round(ftse['change'],2)) + '%)\n'
+        if dax:
+            col = '🟢' if dax['change'] >= 0 else '🔴'
+            msg += col + ' DAX: <b>' + str(round(dax['price'],2)) + '</b> (' + str(round(dax['change'],2)) + '%)\n'
+
+        msg += '<b>ASIA</b>:\n'
+        if nikkei:
+            col = '🟢' if nikkei['change'] >= 0 else '🔴'
+            msg += col + ' NIKKEI: <b>' + str(round(nikkei['price'],2)) + '</b> (' + str(round(nikkei['change'],2)) + '%)\n'
+
         msg += '\n━━━━━━━━━━━━━━━━━━━━\n\n'
-
-        # NEWS WITH BOLD HEADERS AND SPACING
-        msg += '<b>CRUDE IMPACT</b> (Last 24H)\n'
-        msg += CACHE['news'].get('crude','Loading...\n') + '\n'
-
-        msg += '<b>NIFTY / SENSEX IMPACT</b> (Last 24H)\n'
-        msg += CACHE['news'].get('nifty','Loading...\n') + '\n'
-
-        msg += '<b>WORLD LEADERS + WAR ALERT</b> (Last 24H)\n'
-        msg += CACHE['news'].get('world','Loading...\n') + '\n'
-
-        msg += '<b>BIG TRADERS BULK DEALS</b> (Last 24H)\n'
-        msg += CACHE['news'].get('bulk','Loading...\n') + '\n'
-
+        msg += '<b>CRUDE IMPACT</b> (24H)\n' + CACHE['news'].get('crude','Loading...\n') + '\n'
+        msg += '<b>NIFTY IMPACT</b> (24H)\n' + CACHE['news'].get('nifty','Loading...\n') + '\n'
+        msg += '<b>WORLD + WAR</b> (24H)\n' + CACHE['news'].get('world','Loading...\n') + '\n'
+        msg += '<b>GLOBAL NEWS</b> (24H)\n' + CACHE['news'].get('global','Loading...\n') + '\n'
+        msg += '<b>BULK DEALS</b> (24H)\n' + CACHE['news'].get('bulk','Loading...\n') + '\n'
         msg += '━━━━━━━━━━━━━━━━━━━━\n'
-        msg += 'Type <b>plan</b> for Detailed Trade Plan'
+        msg += 'Type <b>plan</b> for Trade Plan'
         return msg
     except Exception as e:
         return 'Bot LIVE - ' + str(e)
@@ -152,6 +178,7 @@ def make_hi_text():
 def get_nifty_plan_text():
     try:
         nifty = get_data_safe('^NSEI')
+        sp500 = get_data_safe('^GSPC')
         price = int(nifty['price']) if nifty else 22520
         base = int(price / 10) * 10
         orb = base + 60
@@ -165,71 +192,26 @@ def get_nifty_plan_text():
         res_t2 = long_entry + 350
         day_name = datetime.now(IST).strftime('%A').upper()
         date_str = datetime.now(IST).strftime('%d %b %Y')
+        sp_ch = str(round(sp500['change'],2)) + '%' if sp500 else '0%'
 
         plan = '<b>NIFTY 50 - TRADE PLAN</b>\n'
-        plan += day_name + ' • ' + date_str + ' | Educational\n'
+        plan += day_name + ' • ' + date_str + ' | Edu\n'
+        plan += 'S&P 500: ' + sp_ch + '\n'
         plan += '━━━━━━━━━━━━━━━━━━━━\n\n'
-
-        plan += '<b>FAST READ (10 Sec)</b>\n'
-        plan += '🟢 LONG tabhi jab:\n'
-        plan += ' → <b>' + str(orb) + ' ke upar tikke = LONG ' + str(long_entry) + '</b>\n'
-        plan += ' → <b>' + str(dip_bot) + '-' + str(dip_top) + ' hold = Dip Buy</b>\n\n'
-
-        plan += '🔴 SHORT tabhi jab:\n'
-        plan += ' → <b>' + str(breakdown) + ' tode + ' + str(bounce_fail) + ' pe fail = SHORT</b>\n\n'
-
-        plan += 'Make-or-Break = <b>' + str(breakdown) + '</b>\n'
-        plan += 'Bada Trend = <b>BEARISH</b> (200-EMA ke neeche)\n\n'
-
-        plan += '━━━━━━━━━━━━━━━━━━━━\n'
-        plan += '<b>CONFLUENCE SNAPSHOT</b>\n\n'
-
-        plan += 'Structure: <b>' + str(breakdown) + '</b> = Oct 8 low retest\n\n'
-        plan += 'Close: <b>' + str(price) + '</b> 🟢 Buyers defend\n\n'
-        plan += 'PCR/OI: <b>PCR 1.15</b> - Defensive 🔵\n\n'
-        plan += 'Flows: <b>FII Selling slow</b> 🟢 | <b>DII Absorb</b> 🟢\n\n'
-
+        plan += '<b>FAST READ</b>\n'
+        plan += '🟢 LONG: <b>' + str(orb) + ' upar = LONG ' + str(long_entry) + '</b>\n'
+        plan += '🔴 SHORT: <b>' + str(breakdown) + ' tode = SHORT</b>\n\n'
+        plan += 'Make-or-Break = <b>' + str(breakdown) + '</b> 🔵\n\n'
         plan += '━━━━━━━━━━━━━━━━━━━━\n'
         plan += '<b>KEY LEVELS</b>\n\n'
-
-        plan += '🟢 <b>Resistance (Upar):</b>\n'
-        plan += ' ' + str(orb) + ' → OR Breakout Trigger\n'
-        plan += ' <b>' + str(long_entry) + ' → LONG Entry</b>\n'
-        plan += ' ' + str(res_t1) + ' → Target 1\n'
-        plan += ' ' + str(res_t2) + ' → Target 2\n\n'
-
-        plan += '🔴 <b>Support (Neeche):</b>\n'
-        plan += ' ' + str(dip_top) + ' → Dip-Buy Zone\n'
-        plan += ' ' + str(bounce_fail) + ' → Failed Bounce\n'
-        plan += ' <b>' + str(breakdown) + ' → Breakdown / SHORT</b>\n'
-        plan += ' ' + str(down_target) + ' → Down Target\n\n'
-
+        plan += '🟢 Resistance: ' + str(orb) + ' -> <b>' + str(long_entry) + '</b> -> ' + str(res_t1) + '\n\n'
+        plan += '🔴 Support: ' + str(dip_top) + ' -> <b>' + str(breakdown) + '</b> -> ' + str(down_target) + '\n\n'
         plan += '━━━━━━━━━━━━━━━━━━━━\n'
         plan += '<b>ENTRY PLAN</b>\n\n'
-
-        plan += '<b>9:15 - 9:30</b>\n'
-        plan += '→ NO TRADE - Sirf OR High/Low mark karo\n\n'
-
-        plan += '<b>PLAN A [9:30-11:00] - OR Breakout</b> 🟢\n'
-        plan += 'Gap-up + Above ' + str(orb) + ' sustain\n'
-        plan += '→ LONG <b>' + str(long_entry) + '</b>\n'
-        plan += ' SL: ' + str(long_entry-120) + ' | T: ' + str(res_t1) + ' → ' + str(res_t2) + '\n\n'
-
-        plan += '<b>PLAN B [9:30-12:30] - Dip Buy</b> 🟢\n'
-        plan += str(dip_bot) + '-' + str(dip_top) + ' hold\n'
-        plan += '→ LONG <b>' + str(dip_top) + '</b> | SL: ' + str(breakdown-40) + '\n\n'
-
-        plan += '<b>PLAN C [Anytime] - Breakdown</b> 🔴\n'
-        plan += 'Below ' + str(breakdown) + ' + fail at ' + str(bounce_fail) + '\n'
-        plan += '→ SHORT <b>' + str(breakdown) + '</b> | SL: ' + str(breakdown+160) + ' → T: ' + str(down_target) + '\n\n'
-
-        plan += 'After 2:45 PM → No New Trades\n\n'
-        plan += '━━━━━━━━━━━━━━━━━━━━\n'
-        plan += '<b>GAME PLAN</b>\n'
-        plan += '→ <b>' + str(breakdown) + '</b> major support 🔵\n'
-        plan += '→ <b>' + str(orb) + ' upar hi long confirm</b> 🟢\n'
-        plan += '→ Risk tight, SL mandatory 🔴\n'
-
+        plan += '<b>PLAN A OR Breakout</b> 🟢\nAbove ' + str(orb) + ' = LONG ' + str(long_entry) + ' SL ' + str(long_entry-120) + '\n\n'
+        plan += '<b>PLAN B Dip Buy</b> 🟢\n' + str(dip_bot) + '-' + str(dip_top) + ' hold = LONG\n\n'
+        plan += '<b>PLAN C Breakdown</b> 🔴\nBelow ' + str(breakdown) + ' = SHORT\n\n'
+        plan += 'Risk tight, SL mandatory 🔴\n'
         return plan
     except Exception as e:
         return 'Plan error: ' + str(e)
@@ -252,7 +234,7 @@ def liveon(m):
             bot.pin_chat_message(int(GROUP_ID), pinned_id, disable_notification=True)
         except:
             pass
-        bot.reply_to(m, 'Live started v9.6 PREMIUM UI')
+        bot.reply_to(m, 'Live started v9.7 GLOBAL FULL')
     except Exception as e:
         bot.reply_to(m, 'Error: ' + str(e))
 
@@ -271,7 +253,7 @@ def updater():
             time.sleep(60)
 
 threading.Thread(target=updater, daemon=True).start()
-print('Bot polling started v9.6 PREMIUM UI LIVE')
+print('Bot polling started v9.7 GLOBAL FULL LIVE')
 while True:
     try:
         bot.infinity_polling(none_stop=True, timeout=90, skip_pending=True)
