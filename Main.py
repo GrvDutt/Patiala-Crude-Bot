@@ -5,7 +5,7 @@ class H(BaseHTTPRequestHandler):
  def do_GET(self):
   self.send_response(200)
   self.end_headers()
-  self.wfile.write(b"OK v8.1 FIXED SINGLE QUOTE")
+  self.wfile.write(b"OK v8.2 NO EMOJI FIXED")
  def do_HEAD(self):
   self.send_response(200)
   self.end_headers()
@@ -61,10 +61,10 @@ def get_data(sym):
 
 def color_fmt(ch, label):
  if ch > 0.10:
-  return '🟢 ' + label + ' (+' + str(round(ch,2)) + '%)'
+  return '[UP] ' + label + ' (+' + str(round(ch,2)) + '%)'
  if ch < -0.10:
-  return '🔴 ' + label + ' (' + str(round(ch,2)) + '%)'
- return '🔵 ' + label + ' (' + str(round(ch,2)) + '% Stable)'
+  return '[DOWN] ' + label + ' (' + str(round(ch,2)) + '%)'
+ return '[STABLE] ' + label + ' (' + str(round(ch,2)) + '%)'
 
 def get_technical_chance(sym='CL=F'):
   try:
@@ -130,17 +130,11 @@ def get_news():
       for i in range(3):
         h = feed.entries[i].title[:70].replace('<','').replace('>','')
         imp = impact(h)
-        if 'RED' in imp:
-         icon = '🔴 BEARISH'
-        elif 'GREEN' in imp:
-         icon = '🟢 BULLISH'
-        else:
-         icon = '🔵 NEUTRAL'
-        txt += str(i+1) + '. ' + h + ' - ' + icon + '\n'
+        txt += str(i+1) + '. ' + h + ' - ' + imp + '\n'
       return txt
   except:
    pass
-  return '1. OPEC supply in focus - 🔵 NEUTRAL\n2. US inventory awaited - 🔵 NEUTRAL\n3. Crude outlook stable - 🔵 NEUTRAL\n'
+  return '1. OPEC supply in focus - NEUTRAL\n2. US inventory awaited - NEUTRAL\n3. Crude outlook stable - NEUTRAL\n'
 
 def get_nifty_plan_text():
   nifty_data = get_data('^NSEI')
@@ -162,10 +156,10 @@ def get_nifty_plan_text():
    sup3 = 22000
    make_break = 22180
   lines = []
-  lines.append('<b>📌 NIFTY 50 - TRADE PLAN</b>')
+  lines.append('<b>NIFTY 50 - TRADE PLAN</b>')
   lines.append('<b>' + datetime.now(IST).strftime('%A %d %b %Y') + '</b> | Educational')
   lines.append('--------------------------')
-  lines.append('<b>FAST READ</b>')
+  lines.append('FAST READ')
   lines.append('LONG: ' + str(res1) + ' upar = LONG ' + str(res2))
   lines.append('SHORT: ' + str(sup2) + ' tode + ' + str(sup2+40) + ' fail')
   lines.append('Make-or-Break = ' + str(make_break))
@@ -187,4 +181,90 @@ def make_hi_text():
  bull_pct, trend, ma20, ma50, rsi_now, atr = get_technical_chance('CL=F')
  now = datetime.now(IST).strftime('%I:%M %p, %d %b')
  news = get_news()
- msg = '<b>📌 PATIALA CRUDE LIVE - ' + now + '</b>\n
+ msg = '<b>PATIALA CRUDE LIVE - ' + now + '</b>\n\n'
+ if crude:
+  label = '$' + str(round(crude['price'],2)) + ' (Rs ' + str(int(crude['price']*inr)) + ')'
+  msg += 'CRUDE OIL\n'
+  msg += color_fmt(crude['change'], label) + '\n'
+  msg += 'Trend: ' + trend + ' [' + str(bull_pct) + '%] | RSI ' + str(int(rsi_now)) + '\n'
+  msg += 'MA20: ' + str(round(ma20,2)) + ' | MA50: ' + str(round(ma50,2)) + ' | ATR: ' + str(round(atr,2)) + '\n\n'
+ if nifty:
+  msg += 'NIFTY: ' + color_fmt(nifty['change'], str(round(nifty['price'],2))) + '\n'
+ if sensex:
+  msg += 'SENSEX: ' + color_fmt(sensex['change'], str(round(sensex['price'],2))) + '\n'
+ if gold:
+  msg += 'GOLD: ' + color_fmt(gold['change'], '$' + str(round(gold['price'],1))) + '\n'
+ msg += '\nNEWS IMPACT\n' + news + '\n'
+ msg += 'Commands: plan | /alert crude 92 | /alerts'
+ return msg
+
+@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hii','hello','status'])
+def hi_handler(m):
+ bot.send_message(m.chat.id, make_hi_text())
+
+@bot.message_handler(func=lambda m: m.text and 'plan' in m.text.lower() and not m.text.startswith('/'))
+def plan_handler(m):
+ bot.send_message(m.chat.id, get_nifty_plan_text())
+
+@bot.message_handler(commands=['alert'])
+def alert_handler(m):
+ try:
+  parts = m.text.split()
+  if len(parts) < 3:
+   bot.reply_to(m, 'Use: /alert crude 92')
+   return
+  sym = parts[1].lower()
+  price = float(parts[2])
+  key = str(m.chat.id) + '_' + sym
+  alerts[key] = {'chat': m.chat.id, 'sym': sym, 'price': price}
+  save_alerts()
+  bot.reply_to(m, 'Alert set: ' + sym.upper() + ' at ' + str(price))
+ except Exception as e:
+  bot.reply_to(m, 'Error: ' + str(e))
+
+@bot.message_handler(commands=['alerts'])
+def list_alerts(m):
+  txt = 'Alerts:\n'
+  found = False
+  for k,v in alerts.items():
+   if str(v['chat']) == str(m.chat.id):
+    txt += '- ' + v['sym'].upper() + ' at ' + str(v['price']) + '\n'
+    found = True
+  if not found:
+   txt = 'No alerts. Use /alert crude 92'
+  bot.send_message(m.chat.id, txt)
+
+@bot.message_handler(commands=['liveon','pinon'])
+def liveon(m):
+ global pinned_id
+ msg = bot.send_message(GROUP_ID, make_hi_text())
+ pinned_id = msg.message_id
+ try:
+  bot.pin_chat_message(GROUP_ID, pinned_id, disable_notification=True)
+ except:
+  pass
+
+def updater():
+ global pinned_id
+ while True:
+  try:
+   time.sleep(900)
+   print('15 min update tick')
+   if pinned_id:
+    try:
+     bot.edit_message_text(make_hi_text(), GROUP_ID, pinned_id)
+    except Exception as e:
+     print('Edit error', e)
+  except Exception as e:
+   print('Updater error', e)
+   time.sleep(60)
+
+threading.Thread(target=updater, daemon=True).start()
+
+while True:
+    try:
+        print('Bot polling started v8.2 NO EMOJI - LIVE')
+        bot.infinity_polling(none_stop=True, timeout=90, skip_pending=True)
+    except Exception as e:
+        print('Polling error', e)
+        time.sleep(10)
