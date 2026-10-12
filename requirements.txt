@@ -1,5 +1,5 @@
 pyTelegramBotAPI
-pytz
-requests
 yfinance
 feedparser
+requests
+pytz
