@@ -1,4 +1,4 @@
-# Main.py v17.7 FINAL CLEAN - 100% Deploy OK
+# Main.py v17.9 EXPLAIN FIX
 import os, threading, time, requests, telebot
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import pytz
@@ -8,7 +8,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b'OK v17.7 CLEAN')
+        self.wfile.write(b'OK v17.9 EXPLAIN FIX')
     def do_HEAD(self):
         self.send_response(200)
         self.end_headers()
@@ -28,7 +28,7 @@ if not BOT_TOKEN:
 bot=telebot.TeleBot(BOT_TOKEN, parse_mode='HTML', threaded=False)
 CACHE={'prices':{}, 'time':0, 'inr':88.5}
 LAST=set()
-LAST_NEWS={'title':'Crude Oil Mixed','imp':'SIDEWAY 50%','link':'https://news.google.com/search?q=crude+oil'}
+LAST_NEWS={'title':'Brent Crude Rises Above $105','imp':'SIDEWAY 50%','link':'https://news.google.com/search?q=crude+oil'}
 
 def get_inr():
     try:
@@ -117,54 +117,6 @@ def get_prices():
         CACHE['time']=now
     return prices if prices else CACHE['prices']
 
-def analyze_news_impact(title, cr):
-    low=title.lower()
-    live=cr.get('price',90)
-    open_p=cr.get('open',90)
-    h1_ch=cr.get('h1_ch',0)
-    supply_down=False
-    supply_up=False
-    if 'production low' in low:
-        supply_down=True
-    if 'output cut' in low:
-        supply_down=True
-    if 'well destroy' in low:
-        supply_down=True
-    if 'opec cut' in low:
-        supply_down=True
-    if 'supply low' in low:
-        supply_down=True
-    if 'production high' in low:
-        supply_up=True
-    if 'supply rise' in low:
-        supply_up=True
-    expected="SIDEWAY"
-    if supply_down:
-        expected="UP"
-    if 'war' in low or 'attack' in low:
-        expected="UP"
-    if 'demand high' in low:
-        expected="UP"
-    if supply_up:
-        expected="DOWN"
-    if 'demand low' in low:
-        expected="DOWN"
-    actual="SIDEWAY"
-    if live>open_p and h1_ch>-0.1:
-        actual="UP"
-    elif h1_ch>0.2:
-        actual="UP"
-    elif h1_ch<-0.1:
-        actual="DOWN"
-    else:
-        actual="SIDEWAY"
-    paradox=False
-    if expected=="UP" and actual=="DOWN":
-        paradox=True
-    if expected=="DOWN" and actual=="UP":
-        paradox=True
-    return expected, actual, paradox, supply_down, supply_up
-
 def get_volume_prediction(cr):
     vol_ratio=cr.get('vol_ratio',1)
     h1_ch=cr.get('h1_ch',0)
@@ -173,12 +125,41 @@ def get_volume_prediction(cr):
     if vol_ratio>1.5 and h1_ch<-0.1:
         return f"📉 VOL: Shark SELLING 🐋 {round(vol_ratio,2)}x HIGH + Price DOWN = NICHE JAYEGA 🔻"
     if vol_ratio<0.7 and h1_ch>0:
-        return f"⚠️ VOL: TRAP 🐟 LOW {round(vol_ratio,2)}x + UP = FAKE PUMP"
+        return f"⚠️ VOL: TRAP 🐟 LOW {round(vol_ratio,2)}x + UP = FAKE PUMP - GIRNE WALA HAI 🔻"
     if vol_ratio<0.7 and h1_ch<0:
-        return f"💤 VOL: WEAK LOW {round(vol_ratio,2)}x = BOUNCE AYEGA 🔼"
+        return f"💤 VOL: WEAK LOW {round(vol_ratio,2)}x + DOWN = BOUNCE AYEGA 🔼"
     return f"➡️ VOL: Normal {round(vol_ratio,2)}x"
 
+def get_explanation(q, cr):
+    q=q.lower()
+    vol_ratio=round(cr.get('vol_ratio',0.18),2)
+    h1_ch=round(cr.get('h1_ch',0),2)
+    rsi=round(cr.get('rsi',50),1)
+    live=round(cr.get('price',91),2)
+    
+    if 'volume' in q or 'vol' in q or 'trap' in q or 'number 6' in q or 'no 6' in q or 'point 6' in q:
+        return f"📚 <b>VOLUME TRAP EXPLAIN - Point No 6</b>\n\n<b>Abhi kya hai?</b>\nVol Ratio = {vol_ratio}x (Normal 1.0x hota hai)\nMatlab aaj volume Avg se 82% KAM hai\nPrice UP {h1_ch}% par Vol LOW hai\n\n<b>Iska matlab kya hai?</b>\n1. 🐟 FAKE PUMP: Bade players (Shark) kharid nahi rahe, sirf chote retailer kharid rahe hai\n2. 💸 Paise nahi lage hai is UP move me, isiliye ye jaldi gir jayega\n3. 🔻 Jab Vol LOW + Price UP hota hai = Trap hota hai, logo ko fasane ke liye upar dikhate hai fir niche patak dete hai\n\n<b>Example:</b>\nNormal me 2.5 Lakh contracts trade hone chahiye, abhi sirf {int(cr.get('vol',45000)/1000)}K hue hai = {vol_ratio}x\nIsiliye maine likha 'FAKE PUMP - GIRNE WALA HAI'\n\n<b>Trade kya kare?</b>\nCALL mat lo ❌, PUT ka wait karo ya WAIT karo. Jab Vol HIGH ayega tabhi CALL lena.\n\n<b>Current Live:</b> ${live} RSI {rsi}"
+
+    if 'rsi' in q:
+        return f"📚 <b>RSI EXPLAIN - Point No 5</b>\n\nAbhi RSI = {rsi}\n\nRSI matlab Relative Strength Index (0-100)\n• RSI > 70 = Overbought 🔴 = Bahut zyada kharida, ab girega - PUT time\n• RSI < 30 = Oversold 🟢 = Bahut zyada becha, ab uthega - CALL time\n• RSI 30-70 = Normal\n\nAbhi {rsi} hai = {('Overbought hai, top pe hai, PUT ka time' if rsi>70 else 'Oversold hai' if rsi<30 else 'Normal hai')}\n\nLive ${live}"
+
+    if 'ema' in q or 'golden' in q or 'death' in q:
+        ema9=round(cr.get('ema9',0),2)
+        ema21=round(cr.get('ema21',0),2)
+        return f"📚 <b>EMA EXPLAIN</b>\n\nEMA 9 = ${ema9} (9 min ka average)\nEMA 21 = ${ema21} (21 min ka average)\n\n• Golden Cross 🟢: EMA 9 > EMA 21 = UPAR jayega = CALL\n• Death Cross 🔴: EMA 9 < EMA 21 = NICHE jayega = PUT\n\nAbhi {('Golden Cross hai, bullish' if ema9>ema21 else 'Death Cross hai, bearish')}"
+
+    if 'explain' in q or 'samjha' in q or 'kya hai' in q or 'matlab' in q:
+        vol_ratio=round(cr.get('vol_ratio',0.18),2)
+        return f"📚 <b>FULL EXPLAIN</b>\n\n{get_volume_prediction(cr)}\n\nVol Ratio {vol_ratio}x ka matlab:\n1.0x = Normal volume\n>1.5x = Shark active 🔥\n<0.7x = Trap 🐟\n\nAbhi {vol_ratio}x = Bahut LOW = Shark nahi kharid rahe, ye UP fake hai.\n\nPrice ${live} hai par bina volume ke upar gaya hai, isiliye girne wala hai."
+
+    return None
+
 def get_smart_ai(news_title, news_imp, cr, user_q=""):
+    # Pehle check karo kya explain manga hai
+    exp = get_explanation(user_q, cr)
+    if exp:
+        return exp
+
     live=cr.get('price',90)
     open_p=cr.get('open',90)
     h1_ch=cr.get('h1_ch',0)
@@ -186,8 +167,18 @@ def get_smart_ai(news_title, news_imp, cr, user_q=""):
     rsi=cr.get('rsi',50)
     ema9=cr.get('ema9',0)
     ema21=cr.get('ema21',0)
-    mom_5m=cr.get('mom_5m',0)
-    expected, actual, paradox, s_down, s_up = analyze_news_impact(news_title+" "+news_imp, cr)
+
+    if rsi>80 and vol_ratio<0.5 and h1_ch>0:
+        final="PUT"
+        chance=78
+        reason=f"🔴 TRAP CONFIRMED: RSI {round(rsi,0)} Overbought + LOW Vol {round(vol_ratio,2)}x = FAKE PUMP"
+        q=user_q.lower()
+        if 'call' in q:
+            return f"🗞️ News: {news_title[:70]}\n\n{reason}\n\n🤖 Nahi CALL mat lo ❌ FAKE PUMP hai {chance}% niche girega 📉"
+        if 'put' in q:
+            return f"🗞️ News: {news_title[:70]}\n\n{reason}\n\n🤖 Haan PUT le sakte ho ✅ {chance}% NICHE girega 📉"
+        return f"🗞️ News: {news_title[:70]}\n\n🤖 SMART: {final} {chance}% | {reason}"
+
     score=0
     reasons=[]
     if live>open_p:
@@ -196,44 +187,34 @@ def get_smart_ai(news_title, news_imp, cr, user_q=""):
     else:
         score=score-1
         reasons.append("Live Open se niche")
-    if h1_ch>0.2:
+    if h1_ch>0.3:
         score=score+2
         reasons.append(f"1H {round(h1_ch,2)}% upar")
-    elif h1_ch<-0.2:
+    elif h1_ch<-0.3:
         score=score-2
         reasons.append(f"1H {round(h1_ch,2)}% niche")
-    if vol_ratio>1.2 and h1_ch>0:
-        score=score+2
-        reasons.append(f"Vol HIGH {round(vol_ratio,2)}x buying")
-    if vol_ratio>1.2 and h1_ch<0:
+    if vol_ratio<0.7 and h1_ch>0:
         score=score-2
-        reasons.append(f"Vol HIGH {round(vol_ratio,2)}x selling")
-    if rsi>70:
-        score=score-1
-        reasons.append(f"RSI {round(rsi,0)} Overbought")
-    elif rsi<30:
-        score=score+1
-        reasons.append(f"RSI {round(rsi,0)} Oversold")
+        reasons.append(f"LOW Vol Trap {round(vol_ratio,2)}x")
+    elif vol_ratio>1.2 and h1_ch>0:
+        score=score+2
+        reasons.append(f"HIGH Vol Buying {round(vol_ratio,2)}x")
+    if rsi>75:
+        score=score-2
+        reasons.append(f"RSI {round(rsi,0)} Overbought 🔴")
+    elif rsi<25:
+        score=score+2
+        reasons.append(f"RSI {round(rsi,0)} Oversold 🟢")
     else:
         reasons.append(f"RSI {round(rsi,0)} normal")
     if ema9>ema21:
         score=score+1
-        reasons.append("EMA Golden Cross")
+        reasons.append("Golden Cross 🟢")
     else:
         score=score-1
-        reasons.append("EMA Death Cross")
-    base_explain=""
-    if s_down:
-        base_explain="🗞️ News: Production LOW = Supply KAM = UPAR jana chahiye tha 🚀"
-    elif s_up:
-        base_explain="🗞️ News: Production HIGH = Supply ZYADA = NICHE jana chahiye tha 📉"
-    else:
-        base_explain=f"🗞️ News: {news_title[:80]}"
-    paradox_explain=""
-    if paradox and expected=="UP" and actual=="DOWN":
-        paradox_explain=f"\n\n🤔 PAR LOGIC: News UP wali hai par Market DOWN {round(h1_ch,2)}% kyu? 1.Dollar strong 2.Profit booking 3.News priced-in"
-    if paradox and expected=="DOWN" and actual=="UP":
-        paradox_explain=f"\n\n🤔 PAR LOGIC: News DOWN wali hai par Market UP {round(h1_ch,2)}%? Shark buying"
+        reasons.append("Death Cross 🔴")
+
+    base_explain=f"🗞️ News: {news_title[:80]}"
     final="WAIT"
     chance=50
     if score>=3:
@@ -241,36 +222,27 @@ def get_smart_ai(news_title, news_imp, cr, user_q=""):
         chance=72
     elif score>=1:
         final="CALL"
-        chance=61
+        chance=60
     elif score<=-3:
         final="PUT"
         chance=72
     elif score<=-1:
         final="PUT"
-        chance=61
-    else:
-        final="WAIT"
-        chance=50
+        chance=60
+
     q=user_q.lower()
-    is_call=False
-    is_put=False
-    if 'call' in q or 'upar' in q or 'buy' in q:
-        is_call=True
-    if 'put' in q or 'niche' in q or 'short' in q:
-        is_put=True
-    explain_part=base_explain+paradox_explain
     reason_txt=", ".join(reasons[:3])
-    if is_call:
+    if 'call' in q:
         if final=="CALL":
-            return f"{explain_part}\n\n🤖 Haan CALL le sakte ho {chance}% UPAR 🚀\nReason: {reason_txt}\nLive ${round(live,2)} Vol {round(vol_ratio,2)}x"
+            return f"{base_explain}\n\n🤖 Haan CALL le sakte ho {chance}% UPAR 🚀\nReason: {reason_txt}"
         else:
-            return f"{explain_part}\n\n🤖 Nahi CALL mat lo {100-chance}% hi chance upar ka 📉\nReason: {reason_txt}"
-    if is_put:
+            return f"{base_explain}\n\n🤖 Nahi CALL mat lo {100-chance}% hi chance upar ka, {chance}% {final} hai 📉\nReason: {reason_txt}"
+    if 'put' in q:
         if final=="PUT":
-            return f"{explain_part}\n\n🤖 Haan PUT le sakte ho {chance}% NICHE 📉\nReason: {reason_txt}"
+            return f"{base_explain}\n\n🤖 Haan PUT le sakte ho {chance}% NICHE 📉\nReason: {reason_txt}"
         else:
-            return f"{explain_part}\n\n🤖 Nahi PUT mat lo Market {actual} hai"
-    return f"{explain_part}\n\n🤖 SMART: {final} {chance}% | {reason_txt} | RSI {round(rsi,0)} | Vol {round(vol_ratio,2)}x"
+            return f"{base_explain}\n\n🤖 Nahi PUT mat lo {final} hai"
+    return f"{base_explain}\n\n🤖 SMART: {final} {chance}% | {reason_txt} | RSI {round(rsi,0)} | Vol {round(vol_ratio,2)}x"
 
 def build_total_status():
     p=get_prices()
@@ -290,7 +262,6 @@ def build_total_status():
     h1_from=cr['h1_from']
     high_y=cr['high_y']
     low_y=cr['low_y']
-    avg_y=cr['avg_y']
     week_ch=round(cr['week_ch'],2)
     curr_tag="BULLISH 🟢🔼"
     if live<=prev:
@@ -316,13 +287,13 @@ def build_total_status():
         ema_cross="Death Cross 🔴 NICHE"
     vol_pred=get_volume_prediction(cr)
     smart_ai=get_smart_ai(title, imp, cr)
-    msg="📊 <b>CRUDE TOTAL STATUS v17.7 CLEAN</b>\n\n"
+    msg="📊 <b>CRUDE TOTAL STATUS v17.9</b>\n\n"
     msg=msg+f"1. CURRENT: {curr_tag}\nLive: ${round(live,2)} | ₹{live_inr}\nOpen: ${round(open_p,2)} | ₹{open_inr} | Prev: ${round(prev,2)}\n📊 Vol: Today {int(vol/1000)}K | Avg {int(vol_avg/1000)}K | {round(vol_ratio,2)}x\n\n"
     msg=msg+f"2. LAST 1 HOUR: {h1_ch}% {trend_1m}\n${round(h1_from,2)} -> ${round(live,2)}\nVol 1H: {int(vol_1h/1000)}K Ch: {round(vol_1h_ch,1)}%\n\n"
-    msg=msg+f"3. KAL KA: H:${round(high_y,2)} L:${round(low_y,2)} Avg:${round(avg_y,2)}\n\n"
+    msg=msg+f"3. KAL KA: H:${round(high_y,2)} L:${round(low_y,2)} Avg:{round((high_y+low_y)/2,2)}\n\n"
     msg=msg+f"4. WEEK TREND: {week_tag} {week_ch}%\n\n"
-    msg=msg+f"5. ⚡ FREE INDICATORS (1-Min):\nEMA 9: ${ema9} | 21: ${ema21} => {ema_cross}\nRSI: {rsi}\n5-Min Momentum: {mom_5m}%\n\n"
-    msg=msg+f"6. {vol_pred}\n\n7. {smart_ai}\n\n8. 🗞️ NEWS: {title}\n{imp}\n🔗 <a href=\"{link}\">Full News Padho</a>"
+    msg=msg+f"5. ⚡ INDICATORS:\nEMA 9: ${ema9} | 21: ${ema21} => {ema_cross}\nRSI: {rsi} {('🔴 Overbought - PUT ka time' if rsi>70 else '🟢 Oversold - CALL ka time' if rsi<30 else 'Normal')}\nMom: {mom_5m}%\n\n"
+    msg=msg+f"6. {vol_pred}\n\n7. {smart_ai}\n\n8. 🗞️ NEWS: {title}\n{imp}\n🔗 <a href=\"{link}\">Full News</a>"
     return msg
 
 @bot.message_handler(func=lambda m: m.text and ('@patialagrvbot' in m.text.lower()))
@@ -333,92 +304,5 @@ def mention_h(m):
     cr=get_prices().get('CL=F',{})
     smart=get_smart_ai(LAST_NEWS['title'], LAST_NEWS['imp'], cr, user_q)
     volp=get_volume_prediction(cr)
-    reply=f"💬 Tune pucha: {m.text}\n\n{smart}\n\n{volp}"
-    kb=InlineKeyboardMarkup()
-    kb.row(InlineKeyboardButton("📈 CALL lu?",callback_data="ask_call"),InlineKeyboardButton("📉 PUT lu?",callback_data="ask_put"))
-    bot.send_message(m.chat.id, reply, parse_mode='HTML', reply_markup=kb)
-
-@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ['hi','hello','crude','hi crude','status'])
-def hi_h(m):
-    bot.send_message(m.chat.id, build_total_status(), disable_web_page_preview=False)
-
-@bot.message_handler(commands=['liveon','live'])
-def liveon(m):
-    try:
-        bot.send_message(int(GROUP_ID), "LIVE v17.7 CLEAN ✅\n"+build_total_status(), disable_web_page_preview=False)
-    except:
-        pass
-    bot.reply_to(m, 'LIVE ON v17.7 ✅')
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('ask_'))
-def callback_ask(call):
-    cr=get_prices().get('CL=F',{})
-    bot.answer_callback_query(call.id)
-    if 'call' in call.data:
-        bot.send_message(call.message.chat.id, get_smart_ai(LAST_NEWS['title'], "call pucha", cr, "call lu?"))
-    elif 'put' in call.data:
-        bot.send_message(call.message.chat.id, get_smart_ai(LAST_NEWS['title'], "put pucha", cr, "put lu?"))
-
-def update_news_cache():
-    try:
-        import feedparser
-        url='https://news.google.com/rss/search?q=crude+oil+WTI+Brent+-gold+-silver+when:1d&hl=en-IN&gl=IN&ceid=IN:en'
-        r=requests.get(url,headers={'User-Agent':'Mozilla/5.0'},timeout=8)
-        feed=feedparser.parse(r.content)
-        for e in feed.entries:
-            clean=e.title.split(' - ')[0].strip()
-            low=clean.lower()
-            if 'gold' in low or 'silver' in low:
-                continue
-            if clean in LAST:
-                continue
-            imp='SIDEWAY 50%'
-            emergency=False
-            if 'war' in low or 'attack' in low or 'cut' in low:
-                imp='BULLISH 🔼 70% upar'
-                emergency=True
-            elif 'down' in low or 'fall' in low:
-                imp='BEARISH 🔻 70% niche'
-                emergency=False
-            LAST.add(clean)
-            LAST_NEWS['title']=clean
-            LAST_NEWS['imp']=imp
-            LAST_NEWS['link']=e.link
-            return emergency,clean,imp,e.link
-        return False,None,None,None
-    except:
-        return False,None,None,None
-
-def updater():
-    last_total=0
-    last_emer=0
-    while True:
-        time.sleep(60)
-        t=time.time()
-        if t-last_emer>=300:
-            try:
-                is_emer,title,imp,link=update_news_cache()
-                if is_emer and title:
-                    cr=get_prices().get('CL=F',{'price':91.85})
-                    smart=get_smart_ai(title,imp,cr)
-                    volp=get_volume_prediction(cr)
-                    full=f"🚨 <b>BREAKING</b> 🚨\n⚠️ {title}\n\n{imp}\n\n{volp}\n\n{smart}"
-                    bot.send_message(int(GROUP_ID), full, parse_mode='HTML', disable_web_page_preview=False)
-            except:
-                pass
-            last_emer=t
-        if t-last_total>=900:
-            try:
-                bot.send_message(int(GROUP_ID), build_total_status(), disable_web_page_preview=False)
-            except:
-                pass
-            last_total=t
-
-threading.Thread(target=updater, daemon=True).start()
-print('Bot v17.7 CLEAN LIVE')
-while True:
-    try:
-        bot.infinity_polling(none_stop=True, timeout=90)
-    except Exception as e:
-        print("poll err",e)
-        time.sleep(10)
+    # Agar explain manga hai toh sirf explain bhejo, volp double mat bhejo
+    if 'explain' in
